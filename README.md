@@ -10,7 +10,7 @@ Comece por `CLAUDE.md`.
 | `referencias/03_identidade_e_estilo.md` | nome, bio, plano de postagem e a proposta visual ("Oficina de bolso") |
 | `roteiros/` | 4 roteiros prontos, com fontes (carro ×2, moto, jet ski) |
 
-## Proporção de veículos (por quê "mais corriqueiramente")
+## Proporção de veículos (por que "mais corriqueiramente")
 O público grande está em **carro e moto**, que são o dia a dia de quem assiste. Caminhão, barco e jet ski entram como
 tempero, porque têm menos dono, mas geram curiosidade e compartilhamento ("manda pro seu tio caminhoneiro").
 
