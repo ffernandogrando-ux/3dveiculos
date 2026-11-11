@@ -1,0 +1,46 @@
+# Canal de VEÍCULOS: vídeos 3D verticais (9:16) no molde "Você conhece alguém que…?"
+
+Este é o **canal de veículos** (carro, moto e, de vez em quando, caminhão, barco e jet ski). **Não é o 3Douro**
+(casa e obra) **nem o canal de hábitos** (corpo e sono). Reaproveita o motor 3D (`motor3d/`), mas o tema, o tom e o
+estilo visual são próprios.
+
+## Leia antes de qualquer coisa
+- `referencias/01_regras_do_roteiro.md`: as regras do roteiro deste canal.
+- `referencias/02_pautas.md`: as pautas e a ordem dos vídeos.
+- `referencias/03_identidade_e_estilo.md`: nome, plano de postagem e estilo ("Oficina de bolso", mascote Parafuso). **Ainda não
+  foi aprovado pelo usuário.**
+
+## Formato do roteiro (resumo)
+"Você conhece alguém que [hábito com o veículo]?" → "Esse cara nem imagina o que tá fazendo com o [motor/pneu/…]" →
+"Olha só." → encenação do hábito → mecanismo invisível (corte do motor, pneu, corrente) com diminutivos e analogias
+de casa → consequências no bolso e no dia a dia ("E tem mais", "Resultado", "e a conta vem…") → "e ainda acha que é
+culpa de…" (do mecânico, da gasolina, do posto) → 1 a 3 objeções "Ah, mas…" (nunca mandar parar de usar: "Nada
+disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E aí, você…?". **Duração de 61 a 75 s**, com
+160–190 palavras. Os fatos precisam de fonte (seção "Fontes"), de preferência o manual do fabricante ou órgão oficial.
+**Sempre** lembrar que "o manual do seu veículo manda" quando o intervalo varia de modelo para modelo.
+
+## Cuidados próprios do nicho
+- Nada de ensinar manobra perigosa, burlar fiscalização, tirar equipamento de segurança ou mexer em freio/airbag.
+- Nada de citar marca de combustível, óleo ou oficina como "a ruim". Pode citar o órgão (Inmetro, Denatran/Senatran,
+  NHTSA) e o fabricante como fonte.
+- Valores em R$ só como "pode passar de mil reais", nunca preço exato (muda rápido e gera briga nos comentários).
+
+## Produção
+- Responda em português. O usuário grava a narração, faz a legenda no CapCut e manda o .srt.
+- Montagem: motor (`motor3d/`, guia `motor3d/LEIAME.md`) + peças do canal (a criar: `pecas_veiculos.py`). O passo a
+  passo técnico da skill `produzir-video-3d` continua valendo; o estilo e o roteiro são os daqui.
+- No vídeo entram etiquetas e ícones curtos (✓ ✗ ⚠ ? R$), o título "VOCÊ FAZ ISSO?" de 0 a ~4 s e o final em close do
+  mascote com "?".
+- Primeiro passo de qualquer sessão que vá renderizar: `bash scripts/instalar.sh`.
+
+Arquivos pesados (.blend, quadros, .wav e .mp4 gerados) não vão para o repositório.
+
+## Estrutura
+| Pasta | Conteúdo |
+|---|---|
+| `referencias/` | regras do roteiro, pautas, identidade e estilo **deste canal** |
+| `referencias/base_habitos/` | análise do concorrente @construindo3d feita para o canal de hábitos (o molde vem dela) |
+| `roteiros/` | roteiros prontos do canal |
+| `motor3d/` | motor 3D herdado (3Douro → hábitos); `pecas_habitos.py` serve de exemplo para o futuro `pecas_veiculos.py` |
+| `biblioteca_sons/` | sons CC0 |
+| `scripts/instalar.sh` | instala Blender/Python do motor |

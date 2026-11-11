@@ -1,0 +1,11 @@
+# gerados pelos scripts (refeitos a qualquer momento)
+*.blend
+*.blend1
+__pycache__/
+videos/*/video/
+videos/*/quadros/
+videos/*/*.wav
+*.mp4
+!motor3d/teste_render/*.mp4
+motor3d/catalogo/
+videos/_estilo_b/_tmp/

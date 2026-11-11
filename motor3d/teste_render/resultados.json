@@ -1,0 +1,57 @@
+[
+ {
+  "cfg": "ref",
+  "nome": "Cycles atual (16 amostras)",
+  "s_por_quadro": 4.218,
+  "primeiro_quadro_s": 4.223,
+  "acelera": 1.0,
+  "min_por_70s": 118.1,
+  "psnr": null,
+  "ssim": null,
+  "threads": 4
+ },
+ {
+  "cfg": "otimizado",
+  "nome": "Cycles otimizado (8 amostras)",
+  "s_por_quadro": 2.061,
+  "primeiro_quadro_s": 2.254,
+  "acelera": 2.05,
+  "min_por_70s": 57.7,
+  "psnr": 45.555186,
+  "ssim": 0.99549,
+  "threads": 4
+ },
+ {
+  "cfg": "otimizado4",
+  "nome": "Cycles otimizado (4 amostras)",
+  "s_por_quadro": 1.474,
+  "primeiro_quadro_s": 1.597,
+  "acelera": 2.86,
+  "min_por_70s": 41.3,
+  "psnr": 43.85011,
+  "ssim": 0.993818,
+  "threads": 4
+ },
+ {
+  "cfg": "eevee",
+  "nome": "EEVEE (16 amostras)",
+  "s_por_quadro": 9.286,
+  "primeiro_quadro_s": 8.728,
+  "acelera": 0.45,
+  "min_por_70s": 260.0,
+  "psnr": 27.096846,
+  "ssim": 0.947519,
+  "threads": 4
+ },
+ {
+  "cfg": "eevee4",
+  "nome": "EEVEE (4 amostras)",
+  "s_por_quadro": 3.225,
+  "primeiro_quadro_s": 5.287,
+  "acelera": 1.31,
+  "min_por_70s": 90.3,
+  "psnr": 31.410802,
+  "ssim": 0.98263,
+  "threads": 4
+ }
+]
