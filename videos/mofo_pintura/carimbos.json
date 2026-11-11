@@ -1,0 +1,16 @@
+[
+ {"t": 7.25,  "fim": 8.9,  "texto": "FUNGO",            "tipo": "problema"},
+ {"t": 14.4,  "fim": 16.4, "texto": "TRINCA",           "tipo": "problema"},
+ {"t": 28.97, "fim": 31.6, "texto": "1 MÊS DEPOIS",     "tipo": "tempo"},
+ {"t": 32.45, "fim": 35.4, "texto": "3 MESES",          "tipo": "tempo"},
+ {"t": 36.3,  "fim": 38.8, "texto": "1 ANO",            "tipo": "tempo"},
+ {"t": 43.4,  "fim": 45.9, "texto": "ESPOROS",          "tipo": "problema"},
+ {"t": 48.95, "fim": 51.7, "texto": "TINTA ANTIMOFO?",  "tipo": "problema"},
+ {"t": 54.15, "fim": 56.6, "texto": "ÁGUA SANITÁRIA?",  "tipo": "problema"},
+ {"t": 59.15, "fim": 60.9, "texto": "O CERTO",          "tipo": "solucao"},
+ {"t": 62.85, "fim": 64.2, "texto": "FECHE A TRINCA",   "tipo": "solucao"},
+ {"t": 64.3,  "fim": 65.8, "texto": "IMPERMEABILIZE",   "tipo": "solucao"},
+ {"t": 65.9,  "fim": 66.75,"texto": "DEIXE SECAR",      "tipo": "solucao"},
+ {"t": 68.7,  "fim": 70.4, "texto": "LUVA + MÁSCARA",   "tipo": "solucao"},
+ {"t": 70.95, "fim": 72.3, "texto": "SÓ AÍ PINTE",      "tipo": "solucao"}
+]

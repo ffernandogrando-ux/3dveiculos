@@ -2,6 +2,10 @@
 name: produzir-video-3d
 description: Produz vídeo explicativo 3D vertical (9:16, estilo low-poly "Você construiu") a partir de um roteiro .srt — monta a cena em corte no Blender (bpy) com o motor3d, renderiza na CPU, gera efeitos sonoros CC0 sincronizados e entrega MP4 + WAV. Use sempre que o usuário enviar um roteiro/.srt ou pedir um novo vídeo desse formato.
 ---
+> **Neste repositório (canal de VEÍCULOS):** o passo a passo técnico abaixo vale, mas o **roteiro e o estilo são os do
+> `CLAUDE.md`** (molde "Você conhece alguém que…?", estilo "Oficina de bolso"), e não os "Você construiu" do 3Douro.
+> As pastas `videos/aterro_sanitario`, `mofo_*`, `ralo_esgoto` e `_estilo_b` são só **exemplos técnicos** do motor.
+
 
 # Produção de vídeo 3D explicativo
 

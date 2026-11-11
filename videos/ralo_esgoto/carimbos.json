@@ -1,0 +1,16 @@
+[
+ {"t": 12.3,  "fim": 14.05, "texto": "FECHO HÍDRICO",      "tipo": "tempo"},
+ {"t": 21.97, "fim": 22.95, "texto": "EVAPORA",            "tipo": "problema"},
+ {"t": 23.05, "fim": 24.35, "texto": "SEM RESPIRO",        "tipo": "problema"},
+ {"t": 29.33, "fim": 30.9,  "texto": "É A ÁGUA!",          "tipo": "solucao"},
+ {"t": 31.13, "fim": 33.1,  "texto": "1 SEMANA DEPOIS",    "tipo": "tempo"},
+ {"t": 34.33, "fim": 36.5,  "texto": "À NOITE",            "tipo": "tempo"},
+ {"t": 37.67, "fim": 40.0,  "texto": "1 MÊS",              "tipo": "tempo"},
+ {"t": 41.7,  "fim": 44.4,  "texto": "GÁS SULFÍDRICO",     "tipo": "problema"},
+ {"t": 50.9,  "fim": 53.4,  "texto": "VEM DO ESGOTO",      "tipo": "problema"},
+ {"t": 56.77, "fim": 59.6,  "texto": "NÃO MISTURE!",       "tipo": "problema"},
+ {"t": 60.1,  "fim": 61.4,  "texto": "O CERTO",            "tipo": "solucao"},
+ {"t": 62.8,  "fim": 64.2,  "texto": "ÁGUA TODA SEMANA",   "tipo": "solucao"},
+ {"t": 64.25, "fim": 66.2,  "texto": "LIMPE A CAIXINHA",   "tipo": "solucao"},
+ {"t": 69.75, "fim": 71.6,  "texto": "CHAME UM ENCANADOR", "tipo": "solucao"}
+]

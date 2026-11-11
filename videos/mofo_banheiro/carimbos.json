@@ -1,0 +1,92 @@
+[
+ {
+  "t": 3.15,
+  "fim": 4.47,
+  "texto": "TODO MÊS",
+  "tipo": "tempo"
+ },
+ {
+  "t": 10.25,
+  "fim": 11.43,
+  "texto": "ÚMIDO",
+  "tipo": "problema"
+ },
+ {
+  "t": 16.17,
+  "fim": 17.7,
+  "texto": "SEU BANHO",
+  "tipo": "problema"
+ },
+ {
+  "t": 21.22,
+  "fim": 22.45,
+  "texto": "TETO FRIO",
+  "tipo": "problema"
+ },
+ {
+  "t": 26.52,
+  "fim": 27.9,
+  "texto": "POR HORAS",
+  "tipo": "tempo"
+ },
+ {
+  "t": 28.97,
+  "fim": 31.65,
+  "texto": "1 SEMANA DEPOIS",
+  "tipo": "tempo"
+ },
+ {
+  "t": 31.8,
+  "fim": 33.9,
+  "texto": "1 MÊS",
+  "tipo": "tempo"
+ },
+ {
+  "t": 37.13,
+  "fim": 39.47,
+  "texto": "EXAUSTOR?",
+  "tipo": "problema"
+ },
+ {
+  "t": 42.9,
+  "fim": 45.27,
+  "texto": "VIZINHO DE CIMA?",
+  "tipo": "problema"
+ },
+ {
+  "t": 49.07,
+  "fim": 51.45,
+  "texto": "PRETO = VAPOR",
+  "tipo": "problema"
+ },
+ {
+  "t": 51.53,
+  "fim": 53.47,
+  "texto": "O CERTO",
+  "tipo": "solucao"
+ },
+ {
+  "t": 57.5,
+  "fim": 58.8,
+  "texto": "+20 MIN",
+  "tipo": "solucao"
+ },
+ {
+  "t": 61.66,
+  "fim": 62.9,
+  "texto": "TEMPORIZADOR",
+  "tipo": "solucao"
+ },
+ {
+  "t": 65.57,
+  "fim": 67.0,
+  "texto": "LUVA + MÁSCARA",
+  "tipo": "solucao"
+ },
+ {
+  "t": 68.51,
+  "fim": 70.05,
+  "texto": "TINTA ANTIMOFO",
+  "tipo": "solucao"
+ }
+]

@@ -33,14 +33,40 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
   mascote com "?".
 - Primeiro passo de qualquer sessão que vá renderizar: `bash scripts/instalar.sh`.
 
-Arquivos pesados (.blend, quadros, .wav e .mp4 gerados) não vão para o repositório.
+
 
 ## Estrutura
 | Pasta | Conteúdo |
 |---|---|
-| `referencias/` | regras do roteiro, pautas, identidade e estilo **deste canal** |
-| `referencias/base_habitos/` | análise do concorrente @construindo3d feita para o canal de hábitos (o molde vem dela) |
-| `roteiros/` | roteiros prontos do canal |
-| `motor3d/` | motor 3D herdado (3Douro → hábitos); `pecas_habitos.py` serve de exemplo para o futuro `pecas_veiculos.py` |
+| `referencias/01_regras_do_roteiro.md` | o molde adaptado a veículos (o que muda, vocabulário, equilíbrio de medo, checklist) |
+| `referencias/02_pautas.md` | ~70 pautas por veículo e a ordem dos 10 primeiros vídeos |
+| `referencias/03_identidade_e_estilo.md` | nome, bio, plano de postagem, estilo "Oficina de bolso" e a lista de peças 3D a criar |
+| `referencias/base_habitos/` | análise do concorrente @construindo3d (feita para o canal de hábitos; é de onde vem o molde) |
+| `roteiros/` | roteiros prontos do canal, com fontes |
+| `motor3d/` | motor 3D (Blender/bpy). `pecas_habitos.py` (mascote Gota, palco micro) é o modelo para o `pecas_veiculos.py` |
+| `videos/aterro_sanitario`, `mofo_*`, `ralo_esgoto` | **exemplos técnicos** de cenas prontas do motor (herança do 3Douro, outro formato) |
+| `videos/_estilo_b/` | exemplo de prévia de estilo (`mockup.py` + quadros) feita para o canal de hábitos: modelo para a prévia deste canal |
 | `biblioteca_sons/` | sons CC0 |
 | `scripts/instalar.sh` | instala Blender/Python do motor |
+| `.claude/skills/produzir-video-3d/` | passo a passo técnico de produção (cena → render → sons → MP4) |
+
+## Onde paramos (atualize esta seção ao fim de cada sessão)
+**Feito (11/11/2026):**
+- Kit do canal: regras, pautas, identidade e estilo propostos (`referencias/`).
+- 4 roteiros com fontes em `roteiros/`: 01 esquentar o carro parado · 02 calibrar só quando parece murcho ·
+  03 corrente da moto seca · 04 jet ski guardado sem lavar por dentro.
+- Motor 3D, sons e exemplos técnicos copiados do repositório 3DNOVO (canal de hábitos).
+
+**Pendente, nesta ordem:**
+1. **Usuário aprovar** o nome (proposta: Raio-X do Motor, @raioxdomotor) e o estilo "Oficina de bolso".
+2. **Prévia do estilo:** criar `motor3d/pecas_veiculos.py` (começar por `parafuso()`, `carro_chibi()`,
+   `palco_oficina()`, `pneu_corte()`) e `videos/_estilo/mockup.py` com 3 quadros de teste, no molde de
+   `videos/_estilo_b/mockup.py`. Mostrar ao usuário.
+3. Roteiros têm 196–229 palavras (a regra diz 160–190; o roteiro de hábitos "soneca" tem 211 e fecha em ~70 s).
+   Enxugar só se o usuário pedir ou se a narração gravada passar de 75 s.
+4. Roteiro 01: a fonte do Departamento de Energia dos EUA foi citada por reportagens; conferir a página original.
+5. Quando o usuário mandar o .srt de um roteiro: produzir o vídeo (skill `produzir-video-3d`).
+6. Escrever os roteiros 05–10 da ordem em `referencias/02_pautas.md`, sempre com fonte.
+
+
+Arquivos pesados (.blend, quadros, .wav e .mp4 gerados) não vão para o repositório.

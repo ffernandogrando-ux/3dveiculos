@@ -9,3 +9,4 @@ videos/*/*.wav
 !motor3d/teste_render/*.mp4
 motor3d/catalogo/
 videos/_estilo_b/_tmp/
+videos/_estilo/_tmp/
