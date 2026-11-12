@@ -96,8 +96,8 @@ def fase(t):
 def agitar(t):
     frio = T.suave(t, t_esfria, t_frio1)
     est = T.suave(t, t_estufa, t_estufa + 0.6) * (1 - frio)
-    amp = 0.011 * (1 - 0.7 * frio)
-    contr = 1.0 + 0.03 * est - 0.10 * frio                  # quente espalha, frio se junta
+    amp = 0.007 * (1 - 0.6 * frio)
+    contr = 0.97 + 0.02 * est - 0.10 * frio                  # quente espalha, frio se junta
     te = fase(t)
     for m in mols:
         a = m["ca"] + (m["a"] - m["ca"]) * contr + amp * math.sin(m["f"][0] * te + m["ph"][0])

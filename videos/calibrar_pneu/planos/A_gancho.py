@@ -16,7 +16,7 @@ t_murcho = R.palavra(P, "murcho", "muxo", reserva=0.92)
 sc = C.setup(P)
 R.dia(sc, sol=(50, 0, -35))
 M = {}
-R.rua(M, x0=-14, x1=40, outro_lado=-7.3)
+R.rua(M)
 c = R.carro(M, cor="vermelho")
 c["raiz"].location = (0, 2.95, 0)
 xf = c["spec"]["xf"]
@@ -30,29 +30,28 @@ pneu = rd.matrix_world.translation if False else (xf, 2.95 - 0.66, 0.28)
 
 # ---- o cara
 Z = ba.ze_adulto("cara", M, expressao="neutro", maos="todas", **R.CARA)
-Z["raiz"].location = (xf + 1.65, 0.95, 0)
-Z["raiz"].rotation_euler = (0, 0, math.radians(-112))
+Z["raiz"].location = (xf - 1.45, 1.4, 0)
+Z["raiz"].rotation_euler = (0, 0, math.radians(80))
 arm, V = Z["arm"], Z["rosto"]
 ba.mao(Z, "e", "punho", 1)            # chave do carro na mão esquerda
 chave = R.mt.box("chave", -0.012, 0.012, -0.004, 0.004, -0.05, 0.0, R._m(M, "chave", "#B9C0C8", 0.3, 1.0))
-chave.location = (0.268, -0.03, 0.78)
+R.bpy.context.view_layer.update()
+chave.location = Z["raiz"].matrix_world @ R.Vector((0.268, -0.03, 0.78))
 ba._no_osso(chave, arm, "mao_e")
 
-neutra = {"tronco": (0, -3, 0), "pescoco": (0, 0, 0), "cabeca": (-2, 3, -6),
-          "ombro_d": (0, 6, 0), "cotovelo_d": (-10, 0, 0), "mao_d": (0, 0, 0),
-          "ombro_e": (-8, -6, 0), "cotovelo_e": (-35, 0, 0)}
-olha = dict(neutra, tronco=(9, -2, 6), pescoco=(7, 0, 4), cabeca=(13, 0, 8))
-mao_queixo = dict(ombro_d=(-48, 12, 0), cotovelo_d=(-128, 0, -22), mao_d=(-10, 0, 0))
+neutra = {"tronco": (0, -3, 0), "pescoco": (0, 0, 0), "cabeca": (-2, 3, -22),
+          "ombro_d": (0, 6, 0), "cotovelo_d": (-10, 0, 0), "ombro_e": (-8, -6, 0), "cotovelo_e": (-35, 0, 0)}
+cintura = dict(ombro_e=(5, -28, -20), cotovelo_e=(-70, 0, -30), ombro_d=(5, 28, 20), cotovelo_d=(-70, 0, 30))
+olha = dict(neutra, tronco=(9, -2, 8), pescoco=(7, 0, 6), cabeca=(13, 0, 12), **cintura)
 R.pose(Z, 0.0, neutra)
-R.pose(Z, max(0.4, t_pneu - 1.0), dict(neutra, cabeca=(0, 1, -2)))          # olha o carro, respira
+R.pose(Z, max(0.4, t_pneu - 1.0), dict(neutra, cabeca=(0, 1, -18)))          # olha o carro, respira
 t1 = t_pneu + 0.12
-R.pose(Z, t1 + 0.45, dict(olha, ombro_d=(-4, 8, 0)))                       # baixa o olhar para o pneu
-R.pose(Z, t1 + 1.05, dict(olha, cabeca=(14, -3, 9), **mao_queixo))          # mão no queixo
-R.pose(Z, t_murcho - 0.25, dict(olha, tronco=(10, -3, 6), cabeca=(14, -11, 10), **mao_queixo))  # inclina a cabeça
-R.pose(Z, D, dict(olha, tronco=(10, -3, 6), cabeca=(15, -12, 10),
-                  **dict(mao_queixo, cotovelo_d=(-131, 0, -22))))
+R.pose(Z, t1 + 0.5, olha)                                                   # mãos na cintura, olha o pneu
+R.pose(Z, t1 + 1.1, dict(olha, tronco=(11, -2, 7), cabeca=(15, -3, 13)))
+R.pose(Z, t_murcho - 0.2, dict(olha, tronco=(12, -4, 7), cabeca=(15, -12, 14)))  # inclina a cabeça: "hmm"
+R.pose(Z, D, dict(olha, tronco=(12, -4, 7), cabeca=(16, -13, 14)))
 ba.mao(Z, "d", "relaxada", 1)
-ba.mao(Z, "d", "punho", C.F(t1 + 0.7))
+ba.mao(Z, "d", "punho", C.F(t1 + 0.3))
 # rosto: olhar desce para o pneu, olho aperta, sobrancelha franze, boca torce
 for no, keys in (("olhar_z", [(0, 0.0), (t1 + 0.3, -0.7), (D, -0.75)]),
                  ("olhar_x", [(0, 0.0), (t1 + 0.3, 0.2), (D, 0.2)]),
@@ -66,13 +65,13 @@ R.piscar(V, max(0.3, t_pneu - 0.7))
 
 # ---- câmera: baixa, atrás do pneu murcho (primeiro plano à esquerda), o cara de frente olhando para ele.
 # Push-in de 4 % e o alvo desce do rosto para entre o rosto e o pneu.
-c0, a0 = (xf - 1.35, 1.6, 0.85), (xf + 1.5, 0.85, 1.05)
-cam, al = R.camera(c0, a0, lens=26, dof=4.0)
+c0, a0 = (xf + 1.45, -0.55, 0.6), (xf - 0.65, 1.65, 1.0)
+cam, al = R.camera(c0, a0, lens=24, dof=5.6)
 p0, p1 = R.Vector(c0), R.Vector(a0)
 R.kloc(cam, 0, p0)
 R.kloc(cam, D, p0 + (p1 - p0) * 0.04)
 R.kloc(al, 0, p1)
 R.kloc(al, t1, p1)
-R.kloc(al, D, (xf + 1.3, 1.0, 0.92))
+R.kloc(al, D, (xf - 0.5, 1.75, 0.9))
 
 C.renderizar(P, sys.argv)
