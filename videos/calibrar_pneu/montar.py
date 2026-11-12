@@ -162,6 +162,8 @@ if __name__ == "__main__":
         p = os.path.join(src, f"{g:04d}.png")
         if os.path.exists(p):
             img = Image.open(p).convert("RGB")
+        elif g == n and os.path.exists(os.path.join(src, f"{g - 1:04d}.png")):   # arredondamento do último quadro
+            img = Image.open(os.path.join(src, f"{g - 1:04d}.png")).convert("RGB")
         elif previa:
             preto = preto or Image.new("RGB", (576, 1024), (12, 14, 18))
             img = preto

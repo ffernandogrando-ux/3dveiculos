@@ -281,46 +281,100 @@ def aplicar_acao(P, nome):
 
 def encadear(P, trechos, fps=24, transicao=0.25):
     """Monta a sequência no NLA. trechos = [(acao, t_ini, dur, {opções})...] em segundos; opções: vel (velocidade),
-    q0/q1 (recorte em quadros da ação), loop (repete até dur; padrão: True se a ação termina com _Loop),
-    blend (s de transição; padrão `transicao`). Trilhas alternadas A/B para o cross-fade funcionar."""
+    q0/q1 (recorte em quadros da ação), loop (repete até cobrir dur; padrão: nome com "_Loop"), blend (s de
+    transição; padrão `transicao`). Uma trilha por trecho, a de cima vence: cada trecho segura a última pose
+    (HOLD_FORWARD) até o seguinte entrar com blend_in por cima dele."""
     arm = P["arm"]
     ad = arm.animation_data or arm.animation_data_create()
     ad.action = None
-    trilhas = [ad.nla_tracks.new(), ad.nla_tracks.new()]
-    trilhas[0].name, trilhas[1].name = "A", "B"
+    ad.use_nla = True
     strips = []
     for k, tr in enumerate(trechos):
         nome, t0, dur = tr[:3]
         op = tr[3] if len(tr) > 3 else {}
         a = _acao(P, nome)
-        f0 = t0 * fps + 1
-        st = trilhas[k % 2].strips.new(f"{k}_{nome}", int(round(f0)), a)
+        trilha = ad.nla_tracks.new()
+        trilha.name = f"{k:02d}_{nome}"
+        st = trilha.strips.new(f"{k}_{nome}", int(round(t0 * fps)) + 1, a)
         s = _slot(a)
         if s is not None and hasattr(st, "action_slot"):
             st.action_slot = s
         q0, q1 = op.get("q0", a.frame_range[0]), op.get("q1", a.frame_range[1])
         st.action_frame_start, st.action_frame_end = q0, q1
         st.scale = 1.0 / op.get("vel", 1.0)
-        comp = (q1 - q0) * st.scale
-        loop = op.get("loop", nome.endswith("_Loop") or "loop" in nome.lower())
-        alvo = dur * fps
-        if loop and comp > 0:
-            st.repeat = max(alvo / comp, 0.01)
-        st.frame_end = st.frame_start + max(alvo, 1)
+        loop = op.get("loop", "_loop" in nome.lower())
+        prox = trechos[k + 1][1] if k + 1 < len(trechos) else t0 + dur
+        b_prox = (trechos[k + 1][3].get("blend", transicao) if k + 1 < len(trechos) and len(trechos[k + 1]) > 3
+                  else transicao)
+        if loop:
+            comp = (q1 - q0) * st.scale
+            st.repeat = max((prox + b_prox - t0) * fps / max(comp, 1e-3), 0.01)
         b = op.get("blend", transicao) * fps
-        st.blend_in = min(b, (st.frame_end - st.frame_start) / 2) if k else 0
-        st.blend_out = 0
-        st.extend_mode = "HOLD_FORWARD" if k else "HOLD"
         st.use_auto_blend = False
+        st.blend_in = min(b, (st.frame_end - st.frame_start) * 0.5) if k else 0.0
+        st.blend_out = 0.0
+        st.extrapolation = "HOLD" if k == 0 else "HOLD_FORWARD"
         strips.append(st)
-    # a transição entra no começo do trecho seguinte: estende o anterior até lá + blend
-    for k in range(len(strips) - 1):
-        a, b = strips[k], strips[k + 1]
-        if a.frame_end < b.frame_start + b.blend_in:
-            if a.repeat != 1.0 and a.action_frame_end > a.action_frame_start:
-                a.repeat = (b.frame_start + b.blend_in - a.frame_start) / ((a.action_frame_end - a.action_frame_start) * a.scale)
-            a.frame_end = b.frame_start + b.blend_in
     return strips
+
+
+def _lin(h):
+    h = h.lstrip("#")
+    c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    return [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+
+
+def vestir(P, camisa="#B5452F", calca="#3A5A86", sapato="#2A2A2E", malha=None, manga=0.36, cintura=0.985,
+           gola=1.52, tornozelo=0.095):
+    """Pinta roupa no corpo-base (Universal Base Characters, T-pose de 1,81 m): camisa de manga curta, calça e
+    sapato por região do corpo em repouso (cor por vértice, mistura sobre a textura da pele). Rápido e sem malha
+    nova; a roupa fica "colada" ao corpo (sem gola, bolso ou dobra). Alturas em m na escala ORIGINAL do arquivo."""
+    bpy = _bpy()
+    o = malha or max(P["malhas"], key=lambda m: len(m.data.vertices))
+    me = o.data
+    at = me.color_attributes.get("roupa") or me.color_attributes.new("roupa", "FLOAT_COLOR", "POINT")
+    cs, cc, cp = _lin(camisa), _lin(calca), _lin(sapato)
+    mw = o.matrix_world.copy()
+    esc = P["raiz"].scale.x or 1.0
+    for v in me.vertices:
+        w = mw @ v.co
+        x, z = abs(w.x - P["raiz"].location.x) / esc, (w.z - P["raiz"].location.z) / esc
+        if z < tornozelo:
+            c = cp + [1.0]
+        elif z < cintura and x < 0.3:
+            c = cc + [1.0]
+        elif z < gola and x < manga:
+            c = cs + [1.0]
+        else:
+            c = [0, 0, 0, 0.0]
+        at.data[v.index].color = c
+    for m in me.materials:
+        nt = m.node_tree
+        bs = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+        ca = nt.nodes.new("ShaderNodeVertexColor")
+        ca.layer_name = "roupa"
+        mx = nt.nodes.new("ShaderNodeMix")
+        mx.data_type = "RGBA"
+        ent = bs.inputs["Base Color"]
+        if ent.links:
+            nt.links.new(ent.links[0].from_socket, mx.inputs[6])
+        else:
+            mx.inputs[6].default_value = ent.default_value
+        nt.links.new(ca.outputs["Color"], mx.inputs[7])
+        nt.links.new(ca.outputs["Alpha"], mx.inputs[0])
+        nt.links.new(mx.outputs[2], ent)
+        # tecido: mais áspero que a pele
+        rg = bs.inputs["Roughness"]
+        mr = nt.nodes.new("ShaderNodeMix")
+        mr.data_type = "FLOAT"
+        if rg.links:
+            nt.links.new(rg.links[0].from_socket, mr.inputs[2])
+        else:
+            mr.inputs[2].default_value = rg.default_value
+        mr.inputs[3].default_value = 0.85
+        nt.links.new(ca.outputs["Alpha"], mr.inputs[0])
+        nt.links.new(mr.outputs[0], rg)
+    return o
 
 
 def colocar(P, pos, rumo=0.0):
@@ -330,7 +384,7 @@ def colocar(P, pos, rumo=0.0):
 
 
 def velocidade_passo(P, acao, pe="foot_l", fps=24):
-    """Velocidade (m/s, na escala do personagem) de uma caminhada no lugar: mede o pé de apoio andando para trás."""
+    """Velocidade (m/s no mundo, já com a escala do personagem) de uma caminhada no lugar: mede o pé de apoio."""
     bpy = _bpy()
     arm = P["arm"]
     ad = arm.animation_data or arm.animation_data_create()
@@ -343,7 +397,7 @@ def velocidade_passo(P, acao, pe="foot_l", fps=24):
     pts = []
     for f in range(int(a.frame_range[0]), int(a.frame_range[1]) + 1):
         sc.frame_set(f)
-        m = arm.matrix_world @ arm.pose.bones[pe].matrix
+        m = arm.pose.bones[pe].matrix               # espaço do esqueleto: não depende de onde/para onde ele está
         pts.append((m.translation.y, m.translation.z))
     zmin = min(p[1] for p in pts)
     v = [abs(pts[i + 1][0] - pts[i][0]) * fps for i in range(len(pts) - 1)
@@ -351,7 +405,7 @@ def velocidade_passo(P, acao, pe="foot_l", fps=24):
     ad.action, ad.use_nla = velho_a, velho_nla
     sc.frame_set(f_velho)
     v.sort()
-    return v[len(v) // 2] if v else 1.2
+    return (v[len(v) // 2] if v else 1.2) * arm.matrix_world.to_scale().x      # m/s no mundo
 
 
 def caminhar(P, acao, t0, t1, p0, p1, fps=24, vel=None):
@@ -359,7 +413,7 @@ def caminhar(P, acao, t0, t1, p0, p1, fps=24, vel=None):
     (vel) que faz o pé não escorregar: use-a no trecho de encadear (opção vel)."""
     from mathutils import Vector
     raiz = P["raiz"]
-    v_acao = velocidade_passo(P, acao, fps=fps) * raiz.scale.x
+    v_acao = velocidade_passo(P, acao, fps=fps)
     d = (Vector(p1) - Vector(p0)).length
     v_real = d / max(t1 - t0, 1e-3)
     raiz.location = p0
@@ -541,6 +595,15 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
     nomes = {m[0]: m for m in mapa}
     arm_inv = mwa.to_quaternion().inverted()
     base_xy = None
+    ultimo = {}
+    ancestrais = set()
+    for t in nomes:
+        p = alvo.pose.bones[t].parent
+        while p is not None:
+            if p.name not in nomes:
+                ancestrais.add(p.name)
+                p.rotation_mode = "QUATERNION"
+            p = p.parent
     f, k = float(q0), 0
     while f <= q1 + 1e-6:
         sc.frame_set(int(f), subframe=f - int(f))
@@ -558,6 +621,10 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
                 q_mundo = delta @ calib[t]
                 q_arm = arm_inv @ q_mundo
                 qb = E.to_quaternion().inverted() @ q_arm
+                ant = ultimo.get(pb.name)
+                if (ant is not None and ant.dot(qb) < 0) or (ant is None and qb.w < 0):
+                    qb.negate()                   # mesmo hemisfério: sem giro de 360° entre chaves/no blend
+                ultimo[pb.name] = qb.copy()
                 pb.rotation_mode = "QUATERNION"
                 pb.rotation_quaternion = qb
                 M = E @ qb.to_matrix().to_4x4()
@@ -577,6 +644,9 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
                 pb.keyframe_insert("rotation_quaternion", frame=inicio + k)
             else:
                 M = E @ pb.matrix_basis
+                if pb.name in ancestrais:         # ex.: 'root' do UE: a ação define a pose dele também (no NLA,
+                    pb.keyframe_insert("rotation_quaternion", frame=inicio + k)   # outra ação não o desalinha)
+                    pb.keyframe_insert("location", frame=inicio + k)
             P[pb.name] = M
         f += passo
         k += 1
