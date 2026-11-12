@@ -32,11 +32,11 @@ def cena(roupa="mecanico", dur=1.0):
         d = bpy.data.lights.new("a", "AREA"); d.energy, d.size = e, tam; d.color = mt.lin(cor)[:3]
         o = mt.link(bpy.data.objects.new("a", d)); o.location = pos
         o.rotation_mode = "QUATERNION"; o.rotation_quaternion = (Vector((0, 0, 1.62)) - Vector(pos)).to_track_quat("-Z", "Y")
-    cd = bpy.data.cameras.new("c"); cd.lens = 85
-    cd.dof.use_dof = True; cd.dof.focus_distance = 1.35; cd.dof.aperture_fstop = 2.8
+    cd = bpy.data.cameras.new("c"); cd.lens = 50          # plano médio (do peito para cima), sem close colado
+    cd.dof.use_dof = True; cd.dof.focus_distance = 1.75; cd.dof.aperture_fstop = 5.6
     cam = mt.link(bpy.data.objects.new("c", cd)); sc.camera = cam
-    cam.location = (-0.18, -1.32, 1.66)
-    cam.rotation_mode = "QUATERNION"; cam.rotation_quaternion = (Vector((0, 0, 1.6)) - cam.location).to_track_quat("-Z", "Y")
+    cam.location = (-0.35, -1.7, 1.62)
+    cam.rotation_mode = "QUATERNION"; cam.rotation_quaternion = (Vector((0, 0, 1.5)) - cam.location).to_track_quat("-Z", "Y")
     return sc, Z
 
 

@@ -238,7 +238,7 @@ def _forma(x, y, z):
     sz = 0.118 if z > 0 else 0.132
     if z < 0:
         t = -z
-        sx *= 1.0 + 0.12 * math.sin(math.pi * min(t, 1.0) * 0.8) - 0.12 * t ** 4      # maxilar largo, queixo largo
+        sx *= 1.0 + 0.06 * math.sin(math.pi * min(t, 1.0) * 0.8) - 0.14 * t ** 4      # maxilar largo, queixo largo
         sy *= 1.0 - 0.1 * t ** 2
         if t < 0.3 and abs(x) > 0.55:               # maçãs do rosto
             sx *= 1.04
@@ -281,11 +281,12 @@ def _cabelo_malha(name, m, corte="curto"):
             infla = 0.008 + 0.03 * topo + 0.012 * topete * topo
         elif corte == "raspado":       # máquina: rente, quase só cor
             infla = 0.003 + 0.004 * topo
-        v.co = _forma(x, y, z) + n * infla
+        borda = min(1.0, (z - limite) / 0.25)      # afina na borda (sem degrau de "capacete")
+        v.co = _forma(x, y, z) + n * (infla * borda + 0.0015)
     bmesh.ops.delete(bm, geom=apagar, context="VERTS")
     o = _liso(mt.mesh_obj(name, bm, m))
     so = o.modifiers.new("esp", "SOLIDIFY")
-    so.thickness = 0.006
+    so.thickness = 0.003
     so.offset = 1.0
     _sub(o, 2)
     return o
@@ -459,14 +460,14 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
     Z["arm"] = arm
     if not civil:
         # ---- macacão: tronco + pernas + mangas até o cotovelo (manga arregaçada)
-        P = [(0, 0, 0.95), (0, -0.02, 1.06), (0, 0, 1.24), (0, 0, 1.38), (0, 0, 1.47),           # 0-4 quadril..pescoço
+        P = [(0, 0, 0.95), (0, -0.02, 1.06), (0, 0, 1.24), (0, 0, 1.38), (0, 0.005, 1.5),        # 0-4 quadril..gola
              (0.105, 0, 0.9), (0.11, 0, 0.72), (0.11, -0.005, 0.5), (0.11, 0.005, 0.36), (0.115, 0, 0.16),   # 5-9
              (-0.105, 0, 0.9), (-0.11, 0, 0.72), (-0.11, -0.005, 0.5), (-0.11, 0.005, 0.36), (-0.115, 0, 0.16),
              (0.2, 0.0, 1.37), (0.228, 0.01, 1.25), (0.245, 0.01, 1.13),                       # 15-17 manga esq.
              (-0.2, 0.0, 1.37), (-0.228, 0.01, 1.25), (-0.245, 0.01, 1.13)]                    # 18-20
         A = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8), (8, 9), (0, 10), (10, 11), (11, 12),
              (12, 13), (13, 14), (3, 15), (15, 16), (16, 17), (3, 18), (18, 19), (19, 20)]
-        Rr = [(0.175, 0.135), (0.18, 0.155), (0.205, 0.15), (0.2, 0.13), (0.07, 0.065),
+        Rr = [(0.175, 0.135), (0.18, 0.155), (0.205, 0.15), (0.2, 0.13), (0.098, 0.085),
               (0.1, 0.098), (0.095, 0.093), (0.068, 0.068), (0.074, 0.074), (0.085, 0.085),
               (0.1, 0.098), (0.095, 0.093), (0.068, 0.068), (0.074, 0.074), (0.085, 0.085),
               (0.078, 0.07), (0.06, 0.058), (0.057, 0.057), (0.078, 0.07), (0.06, 0.058), (0.057, 0.057)]
@@ -482,7 +483,7 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
         P = [(0, 0, 0.925), (0, -0.016, 1.06), (0, 0, 1.24), (0, 0, 1.38), (0, 0, 1.47),
              (0.2, 0.0, 1.37), (0.226, 0.01, 1.255), (-0.2, 0.0, 1.37), (-0.226, 0.01, 1.255)]
         A = [(0, 1), (1, 2), (2, 3), (3, 4), (3, 5), (5, 6), (3, 7), (7, 8)]
-        Rr = [(0.182, 0.142), (0.18, 0.15), (0.2, 0.145), (0.198, 0.128), (0.07, 0.065),
+        Rr = [(0.182, 0.142), (0.18, 0.15), (0.2, 0.145), (0.198, 0.128), (0.105, 0.088),
               (0.074, 0.068), (0.064, 0.06), (0.074, 0.068), (0.064, 0.06)]
         G = ["quadril", "quadril", "tronco", "tronco", "pescoco", "tronco", "ombro_e", "tronco", "ombro_d"]
         if regata:          # sem manga: só o tronco; ombro e braço de pele (alças implícitas)
@@ -525,10 +526,7 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
     dp.texture_coords = "LOCAL"
     Z["corpo"] = corpo
     # trapézios (e, no macacão, o cós da cintura)
-    for s_ in (1, -1):
-        tp = skin(f"{name}_trapezio{s_}", [(0, 0.02, 1.47), (s_ * 0.13, 0.012, 1.41)], [(0, 1)],
-                  [(0.055, 0.05), (0.06, 0.05)], m_trap, parent=root)
-        _deforma(tp, arm, ["pescoco", "tronco"])
+    # (o ombro desce em curva até a gola pelo próprio nó do pescoço do tronco: sem peças de trapézio soltas)
     if not civil:
         cos = skin(name + "_cos", [(0, -0.008, 0.955), (0, -0.008, 0.99)], [(0, 1)], [(0.186, 0.148), (0.186, 0.15)],
                    M["ad_macacao_esc"], parent=root)
@@ -543,18 +541,16 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
                          [(0.062, 0.06), (0.062, 0.06)], M["ad_macacao_esc"], parent=root)
             _deforma(dobra, arm, [f"cotovelo_{l}", f"cotovelo_{l}"])
     # pescoço
-    pc = skin(name + "_pescoco", [(0, 0.008, 1.43), (0, 0.008, 1.535)], [(0, 1)], [(0.074, 0.07), (0.07, 0.066)],
+    pc = skin(name + "_pescoco", [(0, 0.008, 1.44), (0, 0.008, 1.54)], [(0, 1)], [(0.082, 0.076), (0.072, 0.068)],
               m_pele, parent=root)
     _deforma(pc, arm, ["tronco", "pescoco"])
     tronco, quadril = [], []
     canelas = {"e": [], "d": []}
     if not civil:
         # gola com camiseta, faixas refletivas laranja (canelas e braços), bolso, pano, botas
-        tronco.append(skin(name + "_gola", [(-0.06, -0.03, 1.455), (0, -0.065, 1.42), (0.06, -0.03, 1.455)],
-                           [(0, 1), (1, 2)], [(0.018, 0.01), (0.022, 0.012), (0.018, 0.01)], M["ad_camiseta"]))
-        for s in (1, -1):
-            tronco.append(skin(f"{name}_lapela{s}", [(s * 0.03, -0.085, 1.43), (s * 0.08, -0.07, 1.47)], [(0, 1)],
-                               [(0.03, 0.006), (0.024, 0.006)], M["ad_macacao_esc"]))
+        # gola: o próprio macacão sobe até o pescoço (nó 4 do tronco); por baixo, um "V" pequeno da camiseta
+        tronco.append(skin(name + "_camiseta_v", [(-0.028, -0.086, 1.49), (0, -0.094, 1.46), (0.028, -0.086, 1.49)],
+                           [(0, 1), (1, 2)], [(0.012, 0.004), (0.014, 0.004), (0.012, 0.004)], M["ad_camiseta"]))
         bo = mt.box(name + "_bolso", -0.045, 0.045, -0.006, 0.006, -0.05, 0.035, M["ad_macacao_esc"], anchor="center")
         bo.location = (0.08, -0.112, 1.3)
         _bevel(bo, 0.006)
