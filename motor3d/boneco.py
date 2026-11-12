@@ -23,7 +23,7 @@ from mathutils import Vector, Matrix
 import motor as mt
 from motor import lin, empty
 
-COR = {"pele": "#F5A878", "pele_quente": "#EE8A5E", "pele_borda": "#FFC69E", "cabelo": "#3E2116",
+COR = {"pele": "#F5A878", "pele_quente": "#F29870", "pele_borda": "#FFC69E", "cabelo": "#3E2116",
        "macacao": "#1E5BFF", "macacao_escuro": "#1646C9", "camiseta": "#FFF6E0", "bone": "#FF6A00",
        "aba": "#1E5BFF", "bota": "#262A36", "sola": "#16181F", "cinto": "#2E3448", "pano": "#FF2E4D",
        "chave": "#FFC400", "boca": "#7A1E2A", "lingua": "#FF4D63", "bochecha": "#FF7A7A", "olho": "#14141C",
@@ -367,10 +367,11 @@ def _mao(name, M, mat, tipo, sx, pulso):
     if tipo in ("aberta", "aponta"):
         nd = 3 if tipo == "aberta" else 1
         xs = (-0.022, 0.0, 0.022) if nd == 3 else (sx * -0.012,)
-        L = 0.05 if tipo == "aberta" else 0.075
+        L = 0.05 if tipo == "aberta" else 0.095
+        rd = 0.017 if tipo == "aberta" else 0.021
         for k, dx in enumerate(xs):
-            obs.append(skin(f"{name}_dedo{k}", [(px + dx, py - 0.006, pz - 0.05), (px + dx * 1.15, py - 0.01, pz - 0.05 - L)],
-                            [(0, 1)], [(0.017, 0.017), (0.016, 0.016)], pele))
+            obs.append(skin(f"{name}_dedo{k}", [(px + dx, py - 0.006, pz - 0.045), (px + dx * 1.15, py - 0.01, pz - 0.045 - L)],
+                            [(0, 1)], [(rd, rd), (rd * 0.92, rd * 0.92)], pele))
         if tipo == "aponta":      # outros dedos dobrados = punho
             obs.append(skin(f"{name}_punho", [(px + sx * 0.012, py - 0.012, pz - 0.05), (px + sx * 0.012, py - 0.02,
                                                                                         pz - 0.06)],
@@ -438,9 +439,10 @@ def mecanico(name, M, estilo="vinil", pose="parado", expressao="sorriso", olhar=
               mat("pele", rough=0.42, coat=0.15), parent=root)
     _deforma(pc, arm, ["tronco", "pescoco"])
     # gola em V da camiseta, zíper, bolso, cinto, pano no bolso de trás (presos ao tronco)
-    pecas_tronco = [esfera(name + "_gola", 0.075, (0, -0.035, 0.775), mat("camiseta"), scale=(1.1, 0.8, 0.35))]
+    pecas_tronco = [esfera(name + "_gola", 0.06, (0, -0.05, 0.765), mat("macacao_escuro", rough=0.45),
+                           scale=(1.0, 0.6, 0.5))]
     zp = mt.box(name + "_ziper", -0.005, 0.005, -0.004, 0.004, 0.0, 0.25, mat("ziper", rough=0.35), anchor="bottom")
-    zp.location = (0, -0.128, 0.49)
+    zp.location = (0, -0.124, 0.5)
     zp.rotation_euler = (math.radians(4), 0, 0)
     bo = mt.box(name + "_bolso", -0.042, 0.042, -0.005, 0.005, -0.032, 0.032, mat("macacao_escuro", rough=0.5),
                 anchor="center")
@@ -448,9 +450,7 @@ def mecanico(name, M, estilo="vinil", pose="parado", expressao="sorriso", olhar=
     bo.rotation_euler = (math.radians(-14), 0, 0)
     _bevel(bo, 0.012)
     pecas_tronco += [zp, bo]
-    pecas_quadril = [skin(name + "_cinto", [(0, 0, 0.465), (0, 0, 0.495)], [(0, 1)],
-                          [(0.163, 0.13), (0.166, 0.132)], mat("cinto", rough=0.5)),
-                     skin(name + "_pano", [(0.06, 0.12, 0.47), (0.07, 0.145, 0.4), (0.075, 0.145, 0.33)],
+    pecas_quadril = [skin(name + "_pano", [(0.06, 0.12, 0.47), (0.07, 0.145, 0.4), (0.075, 0.145, 0.33)],
                           [(0, 1), (1, 2)], [(0.035, 0.012), (0.03, 0.01), (0.026, 0.01)], mat("pano", rough=0.7))]
     # botas (peça única, bico redondo)
     for x in (0.105, -0.105):
@@ -477,13 +477,13 @@ def mecanico(name, M, estilo="vinil", pose="parado", expressao="sorriso", olhar=
     mr, V = _rosto_mat(f"{name}_rosto_{estilo}", estilo, R, P0)
     Z["rosto"] = V
     esfera(name + "_cabeca_m", R, (0, 0, 0), mr, scale=(1.05, 0.98, 1.0), seg=64, parent=cab)
-    esfera(name + "_nariz", 0.019, (0, -R * 0.99, -R + 0.36 * 2 * R), mat("pele_quente", rough=0.42), seg=24,
+    esfera(name + "_nariz", 0.015, (0, -R * 0.99, -R + 0.36 * 2 * R), mat("pele_quente", rough=0.42), seg=24,
            scale=(1.15, 1, 0.9), parent=cab)
     for sx in (-1, 1):
         esfera(f"{name}_orelha{sx}", 0.04, (sx * R * 1.02, 0.01, -R + 0.42 * 2 * R), mat("pele", rough=0.42),
                scale=(0.45, 0.8, 1.0), seg=24, parent=cab)
     # cabelo: nuca/costeletas + franja aparecendo sob a aba
-    esfera(name + "_cabelo", R * 1.02, (0, R * 0.1, -R * 0.04), mat("cabelo", rough=0.5), scale=(1.05, 0.95, 0.9),
+    esfera(name + "_cabelo", R * 1.02, (0, R * 0.1, -R * 0.04), mat("cabelo", rough=0.5), scale=(0.98, 0.95, 0.9),
            parent=cab)
     fr = esfera(name + "_franja", R * 0.5, (0, -R * 0.86, R * 0.2), mat("cabelo", rough=0.5), scale=(1.3, 0.35, 0.22),
                 seg=32, parent=cab)
@@ -492,10 +492,10 @@ def mecanico(name, M, estilo="vinil", pose="parado", expressao="sorriso", olhar=
     copa = esfera(name + "_bone", R * 1.07, (0, R * 0.03, R * 0.16), mat("bone", rough=0.55),
                   scale=(1.04, 1.02, 0.84), parent=cab)
     _corta_baixo(copa, 0.0)
-    aba = esfera(name + "_aba", R * 0.8, (0, -R * 1.0, R * 0.27), mat("aba", rough=0.45), scale=(1.0, 0.85, 0.05),
+    aba = esfera(name + "_aba", R * 0.8, (0, -R * 1.0, R * 0.27), mat("aba", rough=0.45), scale=(1.0, 1.0, 0.07),
                  parent=cab)
-    aba.rotation_euler = (math.radians(-6), 0, 0)
-    esfera(name + "_emblema", R * 0.14, (0, -R * 1.0, R * 0.56), mat("emblema", rough=0.5), scale=(1, 0.2, 1),
+    aba.rotation_euler = (math.radians(8), 0, 0)
+    esfera(name + "_emblema", R * 0.11, (0, -R * 1.0, R * 0.56), mat("emblema", rough=0.5), scale=(1, 0.12, 1),
            seg=32, parent=cab).rotation_euler = (math.radians(-25), 0, 0)
     _no_osso(cab, arm, "cabeca")
     # ---- mãos por pose (presas aos ossos das mãos)
@@ -512,7 +512,7 @@ def mecanico(name, M, estilo="vinil", pose="parado", expressao="sorriso", olhar=
         obs = [skin(name + "_chave_cabo", [(px, py, pz + 0.03), (px, py, pz - 0.15)], [(0, 1)],
                     [(0.022, 0.011), (0.022, 0.011)], cm)]
         arco = [(px + 0.034 * math.cos(math.radians(a)), py, pz - 0.185 + 0.034 * math.sin(math.radians(a)))
-                for a in range(-235, 60, 30)]
+                for a in range(-45, 226, 30)]          # boca aberta para baixo (chave de boca), não gancho
         obs.append(skin(name + "_chave_boca", arco, [(i, i + 1) for i in range(len(arco) - 1)],
                         [(0.014, 0.011)] * len(arco), cm))
         for o in obs:
@@ -547,7 +547,7 @@ def _corta_baixo(o, z0):
 # ================================================================ cena: oficina clara
 def oficina_clara(M, estilo="vinil", largura=8.0, fundo_y=1.6):
     """Parede azul-acinzentada clara, rodapé com faixa amarela, chão epóxi liso, prateleira com pneus e galões."""
-    cor = {"parede": "#FFE07A", "chao": "#B8C6DC", "faixa": "#1E5BFF", "prat": "#FFFFFF", "pneu": "#2E3448",
+    cor = {"parede": "#CFE6F2", "chao": "#D9DEE6", "faixa": "#FFC928", "prat": "#FFFFFF", "pneu": "#2E3448",
            "galao_a": "#FF2E4D", "galao_b": "#00B37A", "galao_c": "#FFC400"}
 
     def m_(n, rough=0.6):
@@ -557,7 +557,7 @@ def oficina_clara(M, estilo="vinil", largura=8.0, fundo_y=1.6):
         return M[k]
 
     root = empty("oficina")
-    chao = mt.box("chao", -largura / 2, largura / 2, -4, fundo_y, -0.02, 0, m_("chao", 0.35))
+    chao = mt.box("chao", -largura / 2, largura / 2, -4, fundo_y, -0.02, 0, m_("chao", 0.65))
     chao.parent = root
     par = mt.box("parede", -largura / 2, largura / 2, fundo_y, fundo_y + 0.05, 0, 4, m_("parede", 0.8))
     par.parent = root

@@ -57,13 +57,24 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
   03 corrente da moto seca · 04 jet ski guardado sem lavar por dentro.
 - Motor 3D, sons e exemplos técnicos copiados do repositório 3DNOVO (canal de hábitos).
 
-**Feito (12/11/2026):** identidade visual v2 (mascote Parafuso, 5 carros e 3 motos chibi, palco de oficina,
-etiquetas) em `motor3d/pecas_veiculos.py`, ficha em `videos/_estilo/` (`ficha.py` → `ficha_identidade.jpg`,
-`quadro_teste.png`), pesquisa em `referencias/04_referencia_visual_veiculos.md`. Revisada por crítico visual + revisor.
+**Feito (12/11/2026):**
+- Identidade v2 "Oficina de bolso" (mascote Parafuso) foi **REPROVADA** pelo usuário ("torto"). Ficou em
+  `motor3d/pecas_veiculos.py` e `videos/_estilo/` só como histórico.
+- **Estilo escolhido: 3D vinil com cores vivas** (direção A). Mascote humano **Zé, o mecânico**
+  (`motor3d/boneco.py`): corpo inteiriço (Skin+Subsurf) com esqueleto próprio (`girar()`), rosto pintado no shader
+  (nós Value animáveis), mãos por pose, boné laranja, macacão azul #1E5BFF. Sem bigode (evita lembrar o Mario).
+- Veículos lisos de malha única: `motor3d/veiculos3.py` (`carro()`: hatch/popular/suv/picape/seda; `moto()`:
+  street/cub/trail), cores vivas em `LATARIA`.
+- Provas: `videos/_estilo3/` (`personagem_prova.py`, `veiculos_prova.py`, `quadros_teste.py` → quadros 9:16).
+  Render: Standard (o AgX deixava pastel), oficina clara (parede #CFE6F2, rodapé amarelo).
+- Revisado em 3 rodadas por diretor de arte + revisor técnico (agentes). Notas finais ~6,5–7,5.
 
 **Pendente, nesta ordem:**
-1. **Usuário aprovar** o nome (proposta: Raio-X do Motor, @raioxdomotor) e a ficha visual v2.
-2. Peças de corte que faltam em `pecas_veiculos.py`: `pneu_corte()`, `motor_corte()`, `corrente()`, `raio_x()`.
+1. **Usuário aprovar** os quadros 9:16 do estilo vinil (`videos/_estilo3/quadros_lado_a_lado.jpg`) e o nome do canal.
+2. Para animar 70 s (apontado pelo revisor): pneu com sulco + `girar_rodas()` com sinal por lado; todas as mãos
+   pré-criadas com troca por `hide_render`; unificar materiais (`boneco` usa mt.mat, `veiculos3` usa vinil());
+   perfil de render de vídeo (720p, 16 amostras) medido em 10 quadros.
+3. Peças de corte no estilo novo: pneu em corte, motor em corte, corrente, raio-X.
 3. Roteiros têm 196–229 palavras (a regra diz 160–190; o roteiro de hábitos "soneca" tem 211 e fecha em ~70 s).
    Enxugar só se o usuário pedir ou se a narração gravada passar de 75 s.
 4. Roteiro 01: a fonte do Departamento de Energia dos EUA foi citada por reportagens; conferir a página original.

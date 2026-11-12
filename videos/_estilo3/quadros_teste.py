@@ -26,7 +26,7 @@ W, H = 1080, 1920
 def base():
     pp.preparar("vinil")
     mt.scene.cycles.samples = AMOSTRAS
-    mt.scene.view_settings.exposure = -0.45
+    mt.scene.view_settings.exposure = -0.2
     M = {}
     bc.oficina_clara(M, "vinil", largura=10, fundo_y=1.8)
     return M
@@ -47,12 +47,12 @@ def quadro1():
     V = v3.carro("carro", v3.materiais({}), "hatch", "laranja", rosto=True, humor="preocupado")
     V["raiz"].location = (0.55, 0.75, 0)
     V["raiz"].rotation_euler = (0, 0, math.radians(-150))
-    V["raiz"].scale = (0.8, 0.8, 0.8)
+    V["raiz"].scale = (0.72, 0.72, 0.72)
     Z = bc.mecanico("ze", M, "vinil", pose="aponta", expressao="fala", olhar=(0.7, 0.0))
-    Z["raiz"].location = (-0.45, -0.45, 0)
+    Z["raiz"].location = (-0.3, -0.45, 0)
     Z["raiz"].rotation_euler = (0, 0, math.radians(-25))
     pp.luzes(alvo=(0, 0, 0.55), escala=1.0)
-    pp.camera((-0.1, -4.4, 0.9), (0.05, 0.1, 0.78), lens=48, dof=(4.4, 5.6))
+    pp.camera((-0.1, -5.0, 0.6), (0.05, 0.1, 0.85), lens=50, dof=(5.0, 5.6))
     img = Image.open(render("q1.png")).convert("RGBA")
     L = fi.losango("VOCÊ\nFAZ\nISSO?", int(img.width * 0.44))
     img.alpha_composite(L, (int(img.width / 2 - L.width / 2), int(img.width * 0.05)))
@@ -63,17 +63,17 @@ def quadro2():
     """Explicação: close no carro (cara preocupada) com o Zé explicando ao lado + etiqueta de problema."""
     M = base()
     V = v3.carro("carro", v3.materiais({}), "hatch", "laranja", rosto=True, humor="assustado")
-    V["raiz"].location = (-0.2, 0.45, 0)
-    V["raiz"].rotation_euler = (0, 0, math.radians(-118))
+    V["raiz"].location = (-0.1, 0.5, 0)
+    V["raiz"].rotation_euler = (0, 0, math.radians(-108))
     V["raiz"].scale = (0.8, 0.8, 0.8)
     Z = bc.mecanico("ze", M, "vinil", pose="explica", expressao="preocupado", olhar=(-0.4, 0.0))
-    Z["raiz"].location = (0.65, -0.55, 0)
+    Z["raiz"].location = (0.55, -0.5, 0)
     Z["raiz"].rotation_euler = (0, 0, math.radians(28))
     pp.luzes(alvo=(0.2, 0, 0.5), escala=1.0)
-    pp.camera((0.25, -3.6, 0.85), (0.2, 0.0, 0.72), lens=46, dof=(3.6, 5.6))
+    pp.camera((0.15, -4.3, 0.7), (0.15, 0.0, 0.72), lens=46, dof=(4.3, 5.6))
     img = Image.open(render("q2.png")).convert("RGBA")
     e = fi.placa_oficina("MOTOR SEM ÓLEO", "#E5484D", img.width, px=img.width * 0.055)
-    img.alpha_composite(e, (int(img.width / 2 - e.width / 2), int(img.height * 0.62)))
+    img.alpha_composite(e, (int(img.width / 2 - e.width / 2), int(img.height * 0.17)))
     img.convert("RGB").save(os.path.join(HERE, "quadro2_explica.png"))
 
 
