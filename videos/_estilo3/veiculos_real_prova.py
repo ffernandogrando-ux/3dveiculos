@@ -226,7 +226,7 @@ def cena_motos(amostras, escala):
     render(os.path.join(HERE, "motos_real.png"))
 
 
-def cena_populares(amostras, escala):
+def cena_populares(amostras, escala, saida="populares_real.png"):
     """Lineup de populares e SUVs (3/4 frente) no estúdio cinza."""
     nova_cena((int(2400 * escala), int(760 * escala)), amostras)
     M = {}
@@ -245,7 +245,21 @@ def cena_populares(amostras, escala):
     luzes(0, 15)
     so_nos_veiculos(raizes)
     camera((0.0, -22.5, 1.8), (0, 0, 0.36), lens=50)
-    render(os.path.join(HERE, "populares_real.png"))
+    render(os.path.join(HERE, saida))
+
+
+def cena_close(amostras, escala, saida="modernos_close.png"):
+    """Close 3/4 frente do hatch vermelho no estúdio cinza (1600x900)."""
+    nova_cena((int(1600 * escala), int(900 * escala)), amostras)
+    D = v3.carro("hatch_close", {}, "hatch", "#D7262E", estilo="real", escala=0.5)
+    D["raiz"].rotation_euler = (0, 0, math.radians(-38))
+    bpy.context.view_layer.update()
+    print("hatch close interpenetração (vértices):", checar_rodas(D))
+    estudio()
+    luzes(0, 5, 0.55)
+    so_nos_veiculos([D["raiz"]])
+    camera((0.75, -4.4, 0.78), (0.08, 0, 0.36), lens=50)
+    render(os.path.join(HERE, saida))
 
 
 def cena_tecnico(amostras, escala, tipo="hatch", cor="#D7262E", saida="carro_tecnico.png", luz=1.0):
@@ -276,6 +290,8 @@ def cena_tecnico(amostras, escala, tipo="hatch", cor="#D7262E", saida="carro_tec
         if o.type == "MESH":
             col.objects.link(o)
     rim.light_linking.receiver_collection = col
+    frente = tc.luz_area("strip_frente", (3.2, -5.5, 0.9), (0.6, 0, 0.55), 0.25, 3.0, 45 * luz, abertura=60)
+    frente.light_linking.receiver_collection = col
     tc.camera((2.4, -19.6, 1.05), (0.1, 0, 0.60), lente=56)   # carro ~55 % da largura, câmera baixa
     tc.render(os.path.join(HERE, saida))
 
@@ -285,9 +301,14 @@ if __name__ == "__main__":
     if "tecnico" in alvo:
         cena_tecnico(amostras, escala)
     if "suv_tecnico" in alvo:
-        cena_tecnico(amostras, escala, "suv", "#4A5058", "suv_tecnico.png", luz=2.2)
+        cena_tecnico(amostras, escala, "suv", "#4A5058", "suv_tecnico.png", luz=1.7)
     if "populares" in alvo:
         cena_populares(amostras, escala)
+    if "modernos" in alvo:
+        cena_populares(amostras, escala, "modernos_v2.png")
+        cena_close(amostras, escala)
+    if "close" in alvo:
+        cena_close(amostras, escala)
     if "carros" in alvo:
         cena_carros(amostras, escala)
     if "motos" in alvo:

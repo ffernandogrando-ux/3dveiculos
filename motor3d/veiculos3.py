@@ -1386,8 +1386,22 @@ def _larg_x(s, x):
     return _interp(s["larguras"], x) if "larguras" in s else s["W"]
 
 
+def _paralama_x(s, x):
+    """0..1: quanto a estação está sobre uma roda (para o alargamento do para-lama)."""
+    v = 0.0
+    for xw in (s["xf"], s["xr"]):
+        d = abs(x - xw) / ((s["R"] + 0.042) * 1.45)
+        if d < 1:
+            v = max(v, 0.5 + 0.5 * math.cos(math.pi * d))
+    return v
+
+
 def _anel_real(s, x, ponta=0.0, dz=0.0):
-    """dz = correção da altura do alto (ajuste automático contra o encolhimento da subdivisão)."""
+    """dz = correção da altura do alto (ajuste automático contra o encolhimento da subdivisão).
+    s["secao"]: "curva" (padrão: barriga, ombro na cintura, para-lamas alargados, capô com vincos, teto
+    abaulado) ou "reta" (a seção quadrada da versão anterior)."""
+    if s.get("secao", "curva") == "curva":
+        return _anel_real_curvo(s, x, ponta, dz)
     W = _larg_x(s, x) * (1 - 0.045 * ponta)
     zb = _fundo_real(s, x) + 0.03 * ponta
     zt = _interp(s["topo"], x) - 0.02 * ponta + dz
@@ -1415,6 +1429,52 @@ def _anel_real(s, x, ponta=0.0, dz=0.0):
     ]
 
 
+def _anel_real_curvo(s, x, ponta=0.0, dz=0.0):
+    """Seção "de carro de verdade": recolhe embaixo (barriga), ombro mais largo na linha de cintura (vinco),
+    para-lama alargado sobre as rodas, estufa de vidro inclinada para dentro, teto abaulado e, no capô,
+    abaulado central com dois vincos. ponta (0..1) arredonda as pontas na vista de cima."""
+    Wb = _larg_x(s, x) * (1 - 0.10 * ponta)
+    fl = _paralama_x(s, x) * (1 - ponta)
+    zb = _fundo_real(s, x) + 0.035 * ponta
+    zt = _interp(s["topo"], x) - 0.02 * ponta + dz
+    belt = _belt_x(s, x) - 0.012 * ponta
+    hc = s["roof"] - s["belt"]
+    h = max(zt - belt, 0.035)
+    f = min(1.0, max(0.0, (zt - s["belt"]) / hc))
+    zs = min(zb + 0.08, belt - 0.30)
+    zp = min(max(s["zb"] + 0.34, zs + 0.08), belt - 0.14)
+    zs = max(zs, zb + 0.03)
+    zp = max(zp, zs + 0.03)
+    belt = max(belt, zp + 0.03)
+    W = Wb + 0.022 * fl                       # ombro do para-lama
+    p5y = W - 0.045 - 0.05 * f                # base do vidro já recolhida (estufa inclinada)
+    p6y = (W - 0.11) * (1 - f) + (p5y - 0.06) * f
+    p7y = (0.55 * W) * (1 - f) + (p6y - 0.13) * f
+    z7 = (zt - 0.014) * (1 - f) + (belt + 0.935 * h) * f
+    return [
+        (0.0, zb),
+        (W - 0.17 + 0.02 * fl, zb),           # recolhimento embaixo
+        (W - 0.07 + 0.03 * fl, zs),
+        (W - 0.018 + 0.012 * fl, zp),         # barriga / caixa de roda alargada
+        (W, belt),                            # ombro (vinco da cintura)
+        (W - 0.035 - 0.015 * f, belt + min(0.03, 0.35 * h)),
+        (p6y, belt + 0.80 * h),
+        (p7y, z7),                            # calha do teto / vinco do capô
+        (0.0, zt),
+    ]
+
+
+def _ponta_estacao(xs, i):
+    """Arredonda as pontas na vista de cima: 1 na última estação, ~0,4 na penúltima (se estiver perto)."""
+    if i in (0, len(xs) - 1):
+        return 1.0
+    for j in (0, len(xs) - 1):
+        d = abs(xs[i] - xs[j])
+        if d < 0.16:
+            return 0.45 * (1 - d / 0.16) + 0.15
+    return 0.0
+
+
 def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5, aventura=False):
     materiais(M)
     materiais_real(M)
@@ -1423,7 +1483,7 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5, aventura
     root = vazio(name)
     xs = _estacoes_real(s)
     dzs = [0.0] * len(xs)
-    aneis = [_anel_real(s, x, 1.0 if i in (0, len(xs) - 1) else 0.0) for i, x in enumerate(xs)]
+    aneis = [_anel_real(s, x, _ponta_estacao(xs, i)) for i, x in enumerate(xs)]
     topo, jan = s["topo"], s["janelas"]
     PINT, VIDRO, PLAST, BRILHO = 0, 1, 2, 3
     S = len(xs)
@@ -1457,8 +1517,13 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5, aventura
         return PINT
 
     mats_l = [tinta, M["r_vidro"], M["r_plastico"], M["r_preto_brilho"]]
-    vinco = {1: 0.6, 2: 0.95, 3: 0.35, 4: 0.75, 5: 0.5}
-    corpo = loft(name + "_lata", xs, aneis, mats_l, mat_seg, crease=vinco, bojo=(0.05, 0.10), nivel=nivel)
+    if s.get("secao", "curva") == "curva":
+        vinco = {1: 0.2, 2: 0.6, 4: 0.85, 7: 0.35}     # cintura bem marcada, resto macio
+        bojo = (0.12, 0.17)                           # frente e traseira em arco
+    else:
+        vinco = {1: 0.6, 2: 0.95, 3: 0.35, 4: 0.75, 5: 0.5}
+        bojo = (0.05, 0.10)
+    corpo = loft(name + "_lata", xs, aneis, mats_l, mat_seg, crease=vinco, bojo=bojo, nivel=nivel)
     # ajuste automático da silhueta: a subdivisão encolhe a gaiola; mede o alto da superfície no eixo de cada
     # estação e corrige a gaiola até o perfil bater com 'topo' (3 passadas)
     for _ in range(3):
@@ -1468,11 +1533,11 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5, aventura
             loc, _n = sup_.raio((xm, 0, 5), (0, 0, -1))
             if loc is not None:
                 dzs[i] += (_interp(s["topo"], xm) - loc.z) * 0.9
-        aneis = [_anel_real(s, x, 1.0 if i in (0, len(xs) - 1) else 0.0, dzs[i]) for i, x in enumerate(xs)]
+        aneis = [_anel_real(s, x, _ponta_estacao(xs, i), dzs[i]) for i, x in enumerate(xs)]
         me = corpo.data
         bpy.data.objects.remove(corpo)
         bpy.data.meshes.remove(me)
-        corpo = loft(name + "_lata", xs, aneis, mats_l, mat_seg, crease=vinco, bojo=(0.05, 0.10), nivel=nivel)
+        corpo = loft(name + "_lata", xs, aneis, mats_l, mat_seg, crease=vinco, bojo=bojo, nivel=nivel)
     filho(corpo, root)
 
     R, larg = s["R"], s["larg"]
@@ -1506,15 +1571,29 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5, aventura
             f = fita(f"{name}_farol{sy}", sup, bl, 0.11, 0.004, M["r_farol_lente"])
             r_ = fita(f"{name}_refletor{sy}", sup, bl[1:8], 0.06, 0.007, M["r_farol_refletor"])
             orn += [x for x in (d, c, f, r_) if x]
-        zg = zfa - 0.16
-        gr = fita(name + "_grade", sup, [((XF + 3, W * (-0.50 + 1.0 * k / 16), zg), (-1, 0, 0)) for k in range(17)],
-                  0.26, 0.006, M["r_preto_brilho"])
+        # grade definida: miolo escuro menor, moldura prata e filetes claros (nada de "bloco preto")
+        zg = zfa - 0.15
+        hg, lg = 0.19, 0.40
+        gr = fita(name + "_grade", sup, [((XF + 3, W * (-lg + 2 * lg * k / 16), zg), (-1, 0, 0)) for k in range(17)],
+                  hg, 0.006, M["r_plastico"])
         if gr:
             orn.append(gr)
-        for q in range(4):
-            fl = fita(f"{name}_grade_filete{q}", sup, [((XF + 3, W * (-0.46 + 0.92 * k / 14), zg - 0.09 + 0.06 * q),
-                                                        (-1, 0, 0)) for k in range(15)], 0.01, 0.009,
-                      M["r_aluminio_escuro"])
+        for q, dz_ in enumerate((-hg / 2, hg / 2)):
+            mb = fita(f"{name}_grade_moldura{q}", sup, [((XF + 3, W * (-lg - 0.02 + (2 * lg + 0.04) * k / 16),
+                                                          zg + dz_), (-1, 0, 0)) for k in range(17)],
+                      0.022, 0.012, M["r_aluminio"])
+            if mb:
+                orn.append(mb)
+        for sy in (1, -1):
+            mv = fita(f"{name}_grade_lateral{sy}", sup, [((XF + 3, sy * W * (lg + 0.01), zg - hg / 2 + hg * k / 6),
+                                                          (-1, 0, 0)) for k in range(7)], 0.022, 0.012,
+                      M["r_aluminio"])
+            if mv:
+                orn.append(mv)
+        for q in range(5):
+            fl = fita(f"{name}_grade_filete{q}", sup, [((XF + 3, W * (-lg + 0.02 + (2 * lg - 0.04) * k / 14),
+                                                         zg - 0.07 + 0.035 * q), (-1, 0, 0)) for k in range(15)],
+                      0.009, 0.010, M["r_aluminio"])
             if fl:
                 orn.append(fl)
     for sy in ((1, -1) if not s["farol_duplo"] else ()):
@@ -1530,7 +1609,7 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5, aventura
     zg = zfa - 0.15
     gr = None if s["farol_duplo"] else fita(name + "_grade", sup, [((XF + 3, W * (-0.50 + 1.0 * k / 16), zg),
                                                                      (-1, 0, 0)) for k in range(17)],
-                                             lambda t: 0.19 - 0.06 * abs(2 * t - 1) ** 2, 0.006, M["r_preto_brilho"])
+                                             lambda t: 0.22 - 0.07 * abs(2 * t - 1) ** 2, 0.006, M["r_preto_brilho"])
     for q in (range(3) if not s["farol_duplo"] else ()):   # filetes horizontais da grade
         fl = fita(f"{name}_grade_filete{q}", sup, [((XF + 3, W * (-0.43 + 0.86 * k / 14), zg - 0.04 + 0.04 * q),
                                                     (-1, 0, 0)) for k in range(15)], 0.008, 0.009,
@@ -1541,9 +1620,10 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5, aventura
                                          for k in range(13)], 0.012, 0.009, M["r_cromo"])
     zi = s["zb"] + 0.20
     tomada = fita(name + "_tomada", sup, [((XF + 3, W * (-0.62 + 1.24 * k / 16), zi), (-1, 0, 0)) for k in range(17)],
-                  lambda t: 0.10 + 0.05 * math.sin(math.pi * t), 0.004, M["r_preto_brilho"], embute=0.02)
+                  (lambda t: 0.06 + 0.02 * math.sin(math.pi * t)) if s["farol_duplo"] else
+                  (lambda t: 0.13 + 0.05 * math.sin(math.pi * t)), 0.004, M["r_preto_brilho"], embute=0.02)
     orn += [x for x in (gr, friso, tomada) if x]
-    for sy in (1, -1):   # entradas de ar verticais nos cantos do para-choque ("presas")
+    for sy in ((1, -1) if not s["farol_duplo"] else ()):   # entradas de ar verticais nos cantos ("presas")
         cv = fita(f"{name}_canto_ar{sy}", sup, [((XF + 3, sy * W * 0.80, zi - 0.04 + 0.22 * k / 8), (-1, 0, 0))
                                                 for k in range(9)], 0.05, 0.004, M["r_preto_brilho"], embute=0.02)
         if cv:
