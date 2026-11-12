@@ -80,7 +80,7 @@ def materiais_habitos(M):
     return M
 
 
-SEM_CONTORNO = ("_sobr", "_luz", "_brilho", "_reflexo", "_boch")
+SEM_CONTORNO = ("_sobr", "_luz", "_brilho", "_reflexo", "_boch", "_feixe")
 
 
 def contorno(objs, M, esp=0.006):
