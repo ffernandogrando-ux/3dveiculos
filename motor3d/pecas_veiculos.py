@@ -22,12 +22,12 @@ PALETA = {"grafite": "#1E2329", "laranja": "#FF7A1A", "gema": "#FFC928", "azul":
           "creme": "#FFF4E0"}
 
 # Cores de lataria (as mais vistas na rua no Brasil + as de destaque da marca)
-LATARIA = {"branco": "#F2F0EA", "prata": "#C3C8CE", "cinza": "#7D848C", "preto": "#2B2F36", "vermelho": "#D9393E",
+LATARIA = {"branco": "#F2F0EA", "prata": "#C3C8CE", "cinza": "#7D848C", "preto": "#3A3F47", "vermelho": "#D9393E",
            "azul": "#2F6FB3", "laranja": "#FF7A1A", "amarelo": "#FFC928"}
 
 VEI = {  # nome: (cor, rugosidade)
     # Parafuso
-    "aco": ("#D5DCE3", 0.35), "aco_escuro": ("#8C98A4", 0.5), "macacao": ("#2F6FB3", 0.92),
+    "aco": ("#CBD3DB", 0.35), "aco_claro": ("#EEF2F5", 0.3), "aco_escuro": ("#8C98A4", 0.5), "macacao": ("#2F6FB3", 0.92),
     "macacao_escuro": ("#24588F", 0.92), "luva": ("#FF7A1A", 0.85), "bota": ("#2A2E35", 0.8),
     "olho_p": ("#FFFFFF", 0.5), "pupila_p": ("#161A1F", 0.4), "boca_p": ("#6E2A2A", 0.7), "lingua_p": ("#FF8C7A", 0.8),
     "bochecha_p": ("#FF9A7A", 0.9), "sobr_p": ("#2A2E35", 0.7), "bolso_p": ("#FF7A1A", 0.9),
@@ -86,6 +86,17 @@ def escurecer(nome_mat, M, f=0.62):
         hx = "#888888"
     r, g, b = (int(hx[i:i + 2], 16) for i in (1, 3, 5))
     return "#%02X%02X%02X" % (int(r * f), int(g * f), int(b * f))
+
+
+def mostrar_boca(D, tipo, t=None):
+    """Mostra só a boca `tipo` de um mascote/veículo (dict com 'bocas'); com t (segundos), grava a troca como
+    keyframe naquele instante. Esconde a boca inteira (filhos incluídos)."""
+    for k, o in D.get("bocas", {}).items():
+        for x in [o] + list(o.children_recursive):
+            x.hide_render = x.hide_viewport = (k != tipo)
+            if t is not None:
+                x.keyframe_insert("hide_render", frame=mt.F(t))
+                x.keyframe_insert("hide_viewport", frame=mt.F(t))
 
 
 def _na_cor(root, m):
@@ -246,7 +257,7 @@ def parafuso(name, M, R=0.1, pose="lanterna", olhar=(0.0, 0.0), sobrancelha=12.0
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=R, radius2=R * 0.8, depth=ch,
                           matrix=Matrix.Translation((0, 0, ch / 2)) @ Matrix.Rotation(math.radians(30), 4, "Z"))
-    tp = child(mesh_obj(name + "_chanfro", bm, M["aco"]), cab, (0, 0, hh - ch))
+    tp = child(mesh_obj(name + "_chanfro", bm, M["aco_claro"]), cab, (0, 0, hh - ch))
     bv = tp.modifiers.new("arred", "BEVEL")
     bv.width = R * 0.05
     bv.segments = 3
@@ -349,14 +360,26 @@ def parafuso(name, M, R=0.1, pose="lanterna", olhar=(0.0, 0.0), sobrancelha=12.0
     P["lanterna"] = lr
     # ---- poses
     if pose in ("lanterna", "aponta"):
-        P["braco_d"].rotation_euler = (math.radians(-25), math.radians(128), 0)
+        P["braco_d"].rotation_euler = (math.radians(-45), math.radians(95), 0)
     if pose == "aponta":
         P["braco_e"].rotation_euler = (math.radians(-25), math.radians(-105), 0)
     if pose == "joinha":
-        P["braco_e"].rotation_euler = (math.radians(-70), math.radians(-35), 0)
-        dedo = child(capsula(name + "_polegar", R * 0.085, R * 0.2, M["luva"]), P["mao_e"], (0, -R * 0.03, R * 0.14))
-        dedo.rotation_euler = (math.radians(180), 0, 0)
+        P["braco_e"].rotation_euler = (math.radians(-35), math.radians(-120), 0)     # mão erguida ao lado do rosto
     cab.rotation_euler = (0, math.radians(inclina), 0)
+    if pose == "joinha":   # polegar sempre para cima no mundo (preso à luva depois da pose)
+        bpy.context.view_layer.update()
+        mw = P["mao_e"].matrix_world.translation
+        # punho fechado (dedos dobrados na frente) + polegar curto, grosso e inclinado: lê como "joinha", nunca
+        # como um dedo só levantado
+        punho = capsula(name + "_dedos", R * 0.1, R * 0.16, M["luva"])
+        punho.parent = P["mao_e"]
+        punho.matrix_world = (Matrix.Translation(mw + Vector((R * 0.04, -R * 0.12, R * 0.08)))
+                              @ Matrix.Rotation(math.radians(90), 4, "Y"))
+        dedo = capsula(name + "_polegar", R * 0.095, R * 0.14, M["luva"])
+        dedo.parent = P["mao_e"]
+        dedo.matrix_world = (Matrix.Translation(mw + Vector((-R * 0.08, -R * 0.06, R * 0.36)))
+                             @ Matrix.Rotation(math.radians(160), 4, "Y"))
+        P["polegar"] = dedo
     # lanterna: na mão direita, apontando para o que ela "examina", ou guardada no cinto
     if lanterna is None:
         lanterna = pose in ("lanterna", "aponta")
@@ -441,7 +464,7 @@ def carro_chibi(name, M, tipo="hatch", cor="prata", rosto=False, olhar=(0.0, 0.0
     C, Lg, z0, hb, hc, r, ee, capo = T["c"], T["l"], T["z0"], T["hb"], T["hc"], T["r"], T["ee"], T["capo"]
     cr0, cr1, cf1, cf0 = T["cab"]
     root = empty(name)
-    V = {"raiz": root, "rodas": [], "farois": [], "rosto": [], "olhos": [], "pupilas": []}
+    V = {"raiz": root, "rodas": [], "farois": [], "rosto": [], "olhos": [], "pupilas": [], "bocas": {}}
     x0, x1 = -C / 2, C / 2
     zt = z0 + hb
     m_palp = lataria(M, escurecer(m.name, M))
@@ -579,7 +602,7 @@ def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
     materiais_veiculos(M)
     m = lataria(M, cor)
     root = empty(name)
-    V = {"raiz": root, "rodas": [], "farois": [], "corrente": None, "olhos": [], "pupilas": []}
+    V = {"raiz": root, "rodas": [], "farois": [], "corrente": None, "olhos": [], "pupilas": [], "rosto": [], "bocas": {}}
     trail, cub = tipo == "trail", tipo == "cub"
     r = {"street": 0.24, "cub": 0.2, "trail": 0.27}[tipo]
     ee = {"street": 1.0, "cub": 0.9, "trail": 1.06}[tipo]
@@ -722,6 +745,7 @@ def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
         for s in (-1, 1):
             ol = child(esfera(f"{name}_olho{s}", 0.04, (0.012, s * 0.035, 0.012), M["olho_v"], scale=(0.4, 0.9, 1.1)), f)
             V["olhos"].append(ol)
+            V["rosto"].append(ol)
             V["pupilas"].append(child(esfera(f"{name}_pupila{s}", 0.024, (0.012, -s * 0.003, 0), M["pupila_v"],
                                              scale=(0.4, 1, 1.1)), ol))
     if bau:
@@ -795,7 +819,7 @@ def chapa_xadrez_mat(name="chapa_xadrez", base="#2B3138", ressalto="#566170", pa
 
 
 def fundo_brilho_mat(name="fundo_oficina", topo="#14181D", meio="#262C34", brilho="#FF7A1A", z_brilho=0.0,
-                     largura=0.4, forca=0.12):
+                     largura=0.22, forca=0.3):
     """Parede grafite em cor chapada (emissão) com uma faixa de brilho laranja suave na altura z_brilho."""
     m = bpy.data.materials.new(name)
     m.use_nodes = True

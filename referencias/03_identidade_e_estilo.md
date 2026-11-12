@@ -58,3 +58,18 @@ outro palco e outro mascote, para os dois canais não se confundirem.
 
 Antes de renderizar o primeiro vídeo, fazer um quadro de teste do estilo (como o `videos/_estilo_b/` do repositório 3DNOVO) e mostrar ao
 usuário para aprovar.
+
+## Implementado: prévia v2 (12/11/2026, aguardando aprovação)
+Ficha: `videos/_estilo/ficha_identidade.jpg` e quadro 9:16 `videos/_estilo/quadro_teste.png` (refazer com
+`~/.venv-video/bin/python videos/_estilo/ficha.py`). Passou por 2 rodadas de crítico visual + revisor (notas finais: mascote 7,
+veículos 6,5, paleta/luz 6,5, quadro 7; veredito "aprovar com ajustes", ajustes feitos).
+- **Parafuso** (`parafuso()`): cabeça sextavada larga e chata com chanfro claro e fenda Phillips em cima, flange, pescoço
+  de haste rosqueada, macacão azul com bolso laranja, luvas laranja, pernas de aço e botinas. Lanterna amarela na mão
+  direita (feixe em degradê + spot real) ou guardada no cinto. Bocas: sorriso, aberta ("D" largo com dentes), "o", reta.
+- **Carros** (`carro_chibi()`): `hatch`, `popular`, `suv`, `picape` (capota marítima + santo-antônio), `seda`. Olhos só
+  nos faróis (nunca no para-brisa), boca na grade, humor feliz/cansado/susto. Placa Mercosul sem letras.
+- **Motos** (`moto_chibi()`): `street` (tipo CG), `cub` (tipo Biz/Pop), `trail` (tipo Bros); grelha, baú laranja.
+- **Cores de rua:** figurantes em branco, prata, cinza e preto (preto clareado #3A3F47 para não sumir no grafite); o
+  veículo "do cara" em **laranja** (vermelho fica para "problema"; azul é do macacão). Baú nunca vermelho+amarelo (app).
+- **Etiquetas:** plaquinha creme com parafuso em cada ponta; R$ é ícone (moedinha), não categoria.
+- Pesquisa de referência: `referencias/04_referencia_visual_veiculos.md`.

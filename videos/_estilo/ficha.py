@@ -129,7 +129,7 @@ def cena_expressoes():
     return render("expressoes.png", (1600, 760))
 
 
-CARROS = (("picape", "branco"), ("suv", "preto"), ("hatch", "laranja"), ("popular", "prata"), ("seda", "cinza"))
+CARROS = (("picape", "branco"), ("suv", "cinza"), ("hatch", "laranja"), ("popular", "prata"), ("seda", "preto"))
 
 
 def cena_carros():
@@ -146,11 +146,11 @@ def cena_carros():
         objs.append(V["raiz"])
     ph.contorno(objs, M, esp=0.012)
     iluminar(3.0)
-    camera((0, -17.5, 3.9), (0, 0, 0.45), lens=50)
-    return render("carros.png", (1800, 700))
+    camera((0, -17.5, 3.9), (0, 0, 0.75), lens=50)
+    return render("carros.png", (1800, 560))
 
 
-MOTOS = (("street", "vermelho", False), ("cub", "branco", True), ("trail", "preto", False))
+MOTOS = (("street", "vermelho", False), ("cub", "branco", True), ("trail", "azul", False))
 
 
 def cena_motos():
@@ -161,12 +161,12 @@ def cena_motos():
     objs = []
     for i, (tipo, cor, bau) in enumerate(MOTOS):
         V = pv.moto_chibi(f"m{i}", M, tipo=tipo, cor=cor, bau=bau)
-        V["raiz"].location = (-1.75 + i * 1.75, 0, 0)
+        V["raiz"].location = (-1.85 + i * 1.75, 0, 0)
         V["raiz"].rotation_euler = (0, 0, math.radians(-28))
         objs.append(V["raiz"])
     ph.contorno(objs, M, esp=0.008)
     iluminar(2.0)
-    camera((0, -7.0, 1.6), (0, 0, 0.42), lens=50)
+    camera((0, -7.6, 1.6), (0, 0, 0.42), lens=50)
     return render("motos.png", (1800, 640))
 
 
@@ -177,15 +177,15 @@ def cena_quadro():
     pv.materiais_veiculos(M)
     pv.palco_oficina("palco", M, largura=14, fundo_y=2.2, z_brilho=0.35)
     V = pv.carro_chibi("carro", M, tipo="hatch", cor="laranja", rosto=True, humor="cansado", olhar=(-0.6, 0.2))
-    V["raiz"].location = (-0.25, 0.65, 0)
-    V["raiz"].rotation_euler = (0, 0, math.radians(-58))
-    P = pv.parafuso("par", M, R=0.2, pose="lanterna", boca="aberta", sobrancelha=16, olhar=(-0.7, 0.2), luz=True,
-                    mira=(-1.0, -0.1, -0.3), inclina=6)
-    P["raiz"].location = (0.42, -0.45, 0)
-    P["raiz"].rotation_euler = (0, 0, math.radians(-50))
+    V["raiz"].location = (-0.15, 0.75, 0)
+    V["raiz"].rotation_euler = (0, 0, math.radians(-62))
+    P = pv.parafuso("par", M, R=0.2, pose="lanterna", boca="aberta", sobrancelha=16, olhar=(-0.8, 0.1), luz=True,
+                    mira=(-1.0, 0.5, -0.15), inclina=6)
+    P["raiz"].location = (0.62, -0.3, 0)
+    P["raiz"].rotation_euler = (0, 0, math.radians(-35))
     ph.contorno([V["raiz"], P["raiz"]], M, esp=0.009)
     iluminar(1.4)
-    camera((0.15, -2.9, 1.05), (0.05, 0.1, 0.22), lens=28)
+    camera((0.2, -2.7, 1.15), (0.12, 0.2, 0.32), lens=31)
     return render("quadro_base.png", (576, 1024))
 
 

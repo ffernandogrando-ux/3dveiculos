@@ -57,11 +57,13 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
   03 corrente da moto seca · 04 jet ski guardado sem lavar por dentro.
 - Motor 3D, sons e exemplos técnicos copiados do repositório 3DNOVO (canal de hábitos).
 
+**Feito (12/11/2026):** identidade visual v2 (mascote Parafuso, 5 carros e 3 motos chibi, palco de oficina,
+etiquetas) em `motor3d/pecas_veiculos.py`, ficha em `videos/_estilo/` (`ficha.py` → `ficha_identidade.jpg`,
+`quadro_teste.png`), pesquisa em `referencias/04_referencia_visual_veiculos.md`. Revisada por crítico visual + revisor.
+
 **Pendente, nesta ordem:**
-1. **Usuário aprovar** o nome (proposta: Raio-X do Motor, @raioxdomotor) e o estilo "Oficina de bolso".
-2. **Prévia do estilo:** criar `motor3d/pecas_veiculos.py` (começar por `parafuso()`, `carro_chibi()`,
-   `palco_oficina()`, `pneu_corte()`) e `videos/_estilo/mockup.py` com 3 quadros de teste, no molde de
-   `videos/_estilo_b/mockup.py`. Mostrar ao usuário.
+1. **Usuário aprovar** o nome (proposta: Raio-X do Motor, @raioxdomotor) e a ficha visual v2.
+2. Peças de corte que faltam em `pecas_veiculos.py`: `pneu_corte()`, `motor_corte()`, `corrente()`, `raio_x()`.
 3. Roteiros têm 196–229 palavras (a regra diz 160–190; o roteiro de hábitos "soneca" tem 211 e fecha em ~70 s).
    Enxugar só se o usuário pedir ou se a narração gravada passar de 75 s.
 4. Roteiro 01: a fonte do Departamento de Energia dos EUA foi citada por reportagens; conferir a página original.
