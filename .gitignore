@@ -21,3 +21,11 @@ assets/**
 !assets/**/*.md
 !assets/**/*.sh
 !assets/**/*.py
+
+# biblioteca de material livre (baixada por scripts/baixar_assets.sh)
+assets/**
+!assets/**/
+!assets/**/*.md
+!assets/**/*.sh
+!assets/**/*.py
+videos/_assets/_tmp/
