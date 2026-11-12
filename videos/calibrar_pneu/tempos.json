@@ -1,0 +1,20 @@
+{
+ "fonte": "estimado pela tabela do roteiro (trocar pelos tempos do .srt quando chegar)",
+ "duracao": 69.0,
+ "planos": {
+  "A_gancho":      [0.0, 4.0],
+  "B_dinheiro":    [4.0, 6.0],
+  "C_olha_so":     [6.0, 7.0],
+  "D_chute":       [7.0, 11.0],
+  "E_perde_ar":    [11.0, 18.0],
+  "F_achata":      [18.0, 25.0],
+  "G_esquenta":    [25.0, 31.0],
+  "H_resultado":   [31.0, 36.0],
+  "I_posto":       [36.0, 40.0],
+  "J_quente":      [40.0, 46.0],
+  "K_max":         [46.0, 54.0],
+  "L_certo":       [54.0, 62.0],
+  "M_manda":       [62.0, 66.0],
+  "N_final":       [66.0, 69.0]
+ }
+}
