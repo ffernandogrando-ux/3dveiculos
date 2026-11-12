@@ -595,14 +595,14 @@ def aro_mat(M, cor=None):
 
 
 def carro(name, M, tipo="hatch", cor="prata", rosto=False, humor="feliz", olhar=(0.0, 0.0), placa_on=True,
-          nivel=2, aro=None, retrovisor=True, estilo="chibi", escala=0.5):
+          nivel=2, aro=None, retrovisor=True, estilo="chibi", escala=0.5, aventura=False):
     """Carro de brinquedo de vinil. tipo: hatch | popular | suv | picape | seda. cor: nome, chave de M ou hex.
     rosto=True põe olhos NOS FARÓIS e boca na grade (humor: feliz | preocupado | assustado | bravo).
     aro=None (claro) ou cor do aro ('vermelho', '#FFC400'...). retrovisor=True põe os espelhinhos.
     estilo="real": variante adulta (proporção real em metros, reduzida por `escala`; sem rosto).
     Devolve dict(raiz, rodas, lataria, rosto, corpo, partes)."""
     if estilo == "real":
-        return _carro_real(name, M, tipo, cor, placa_on, nivel, escala)
+        return _carro_real(name, M, tipo, cor, placa_on, nivel, escala, aventura)
     materiais(M)
     lat = lataria_mat(M, cor)
     s = _spec(tipo)
@@ -1115,7 +1115,10 @@ def pintura_mat(M, cor):
     hx = REAL_COR.get(cor, LATARIA.get(cor, cor))
     k = "pint_" + hx.lstrip("#")
     if k not in M:
-        M[k] = pintura("v3_" + k, hx)
+        r, g, b = (int(hx.lstrip("#")[i:i + 2], 16) / 255 for i in (0, 2, 4))
+        cinza = max(r, g, b) - min(r, g, b) < 0.08
+        metal = 0.55 if cinza and 0.3 < max(r, g, b) < 0.85 else (0.3 if cinza and max(r, g, b) >= 0.85 else 0.15)
+        M[k] = pintura("v3_" + k, hx, metal=metal)     # prata/grafite metálicos, branco perolado
     return M[k]
 
 
@@ -1242,12 +1245,59 @@ def roda_real(name, M, R=0.31, larg=0.195, aro_r=0.19, raios=5, moto=False):
 
 
 # ---------------------------------------------------------------- carros reais
-def _spec_real(tipo):
+def _alvo(pontos, x_eixo_d_alvo, xf):
+    """Converte um perfil-alvo dado com x medido a partir do para-choque dianteiro (como o diretor passa) para o
+    x do motor (origem no meio do entre-eixos, frente em +x): x = xf + x_eixo_d_alvo - x_alvo."""
+    return [(round(xf + x_eixo_d_alvo - x, 4), z, *r) for x, z, *r in pontos]
+
+
+def _spec_real(tipo, aventura=False):
     """Arquétipos brasileiros atuais (medidas reais em metros). topo = perfil do alto [(x, z, material do trecho
     seguinte)]; janelas = vidro lateral (x0, x1); portas = x das juntas; kick = quanto a cintura sobe até a traseira."""
     s = dict(R=0.32, larg=0.205, aro=0.216, W=0.875, zb=0.19, belt=1.00, roof=1.46, tumble=0.14,
-             cover=False, clad=False, rails=False, santo=False, spoiler=False, pilar_preto=False, kick=0.0)
-    if tipo == "hatch":       # Polo / HB20 / Onix: 4,07 x 1,75 x 1,47 m, entre-eixos 2,56 (perfil-alvo do diretor)
+             cover=False, clad=False, rails=False, santo=False, spoiler=False, pilar_preto=False, kick=0.0,
+             protetor=False, farol_duplo=False)
+    if tipo in ("sedan_compacto", "sedan"):
+        tipo = "seda"
+    if tipo == "popular":     # Mobi / Kwid: 3,60 x 1,63 x 1,50 m, entre-eixos 2,35, aro 14
+        s.update(wb=2.35, fr=0.68, tr=0.57, W=0.815, R=0.285, larg=0.175, aro=0.178, zb=0.20, belt=0.95,
+                 roof=1.50, spoiler=True)
+        xf = s["wb"] / 2
+        s["x_spoiler"] = xf + 0.68 - 3.40
+        P = lambda XF, XR: dict(
+            topo=_alvo([(3.60, 0.98, "lata"), (3.52, 1.05, "vidro"), (3.40, 1.43, "lata"), (3.20, 1.46, "teto"),
+                        (1.95, 1.50, "teto"), (1.65, 1.48, "vidro"), (0.95, 1.00, "lata"), (0.08, 0.86, "lata"),
+                        (0.0, 0.80, None)][::1], 0.68, xf),
+            cintura=_alvo([(3.60, 1.00), (3.20, 1.00), (0.95, 0.95), (0.0, 0.95)], 0.68, xf),
+            larguras=_alvo([(3.60, 0.79), (2.85, 0.815), (1.05, 0.815), (0.0, 0.77)], 0.68, xf),
+            janelas=[(-1.25, -0.05), (0.03, 0.86)], portas=[0.80, -0.04, -0.95])
+        if aventura:          # "jeito de SUV" (tipo Kwid): mais alto, molduras pretas, barras, protetor prata
+            s.update(zb=0.27, R=0.295, clad=True, rails=True, protetor=True)
+    elif tipo == "suv":       # T-Cross / Creta (perfil-alvo): 4,20 x 1,76 x 1,57 m, entre-eixos 2,65, R 0,34
+        s.update(wb=2.65, fr=0.86, tr=0.69, W=0.88, R=0.34, larg=0.215, aro=0.216, zb=0.25, belt=1.05,
+                 roof=1.55, clad=True, rails=True, pilar_preto=True, spoiler=True, protetor=True, farol_duplo=True)
+        xf = s["wb"] / 2
+        s["x_spoiler"] = xf + 0.86 - 3.80
+        P = lambda XF, XR: dict(
+            topo=_alvo([(4.20, 1.00, "lata"), (4.12, 1.05, "lata"), (4.02, 1.12, "vidro"), (3.80, 1.48, "lata"),
+                        (3.55, 1.53, "teto"), (2.45, 1.555, "teto"), (2.10, 1.55, "vidro"), (1.25, 1.05, "lata"),
+                        (0.12, 1.00, "lata"), (0.0, 0.96, None)], 0.86, xf),
+            cintura=_alvo([(4.20, 1.12), (3.55, 1.12), (1.25, 1.05), (0.0, 1.05)], 0.86, xf),
+            larguras=_alvo([(4.20, 0.85), (3.45, 0.88), (1.10, 0.88), (0.0, 0.845)], 0.86, xf),
+            janelas=[(-1.22, -0.08), (0.02, 0.88)], portas=[0.80, -0.06, -1.05])
+    elif tipo == "suv_medio": # Compass: 4,40 x 1,82 x 1,65 m, entre-eixos 2,64, aro 18, mais robusto
+        s.update(wb=2.64, fr=0.92, tr=0.84, W=0.91, R=0.36, larg=0.235, aro=0.229, zb=0.28, belt=1.12,
+                 roof=1.64, clad=True, rails=True, pilar_preto=True, spoiler=True, protetor=True, farol_duplo=True)
+        xf = s["wb"] / 2
+        s["x_spoiler"] = xf + 0.92 - 4.02
+        P = lambda XF, XR: dict(
+            topo=_alvo([(4.40, 1.08, "lata"), (4.32, 1.12, "lata"), (4.22, 1.20, "vidro"), (4.02, 1.57, "lata"),
+                        (3.75, 1.62, "teto"), (2.60, 1.645, "teto"), (2.24, 1.64, "vidro"), (1.38, 1.13, "lata"),
+                        (0.13, 1.07, "lata"), (0.0, 1.02, None)], 0.92, xf),
+            cintura=_alvo([(4.40, 1.19), (3.70, 1.19), (1.38, 1.12), (0.0, 1.12)], 0.92, xf),
+            larguras=_alvo([(4.40, 0.88), (3.60, 0.91), (1.20, 0.91), (0.0, 0.875)], 0.92, xf),
+            janelas=[(-1.30, -0.08), (0.02, 0.82)], portas=[0.80, -0.06, -1.10])
+    elif tipo == "hatch":       # Polo / HB20 / Onix: 4,07 x 1,75 x 1,47 m, entre-eixos 2,56 (perfil-alvo do diretor)
         # perfil-alvo dado com x a partir do para-choque dianteiro: aqui x = 2,11 - x_alvo
         s.update(wb=2.56, fr=0.83, tr=0.68, R=0.31, aro=0.216, zb=0.25, belt=0.92, roof=1.47, spoiler=True,
                  x_spoiler=-1.61)
@@ -1258,16 +1308,6 @@ def _spec_real(tipo):
             cintura=[(XR, 1.02), (-1.45, 1.02), (0.81, 0.92), (XF, 0.92)],
             larguras=[(XR, 0.835), (-1.20, 0.875), (0.90, 0.875), (XF, 0.81)],
             janelas=[(-1.30, -0.08), (0.02, 0.78)], portas=[0.70, -0.06, -0.98])
-    elif tipo == "suv":       # T-Cross / Creta: derivado do hatch, +0,14 de altura, 4,20 m, rodas maiores
-        s.update(wb=2.65, fr=0.85, tr=0.70, W=0.885, R=0.345, larg=0.215, aro=0.216, zb=0.33, belt=1.06,
-                 roof=1.61, clad=True, rails=True, pilar_preto=True, spoiler=True, x_spoiler=-1.66)
-        P = lambda XF, XR: dict(
-            topo=[(XR, 1.10, "lata"), (XR + 0.10, 1.17, "vidro"), (-1.66, 1.50, "lata"), (-1.42, 1.54, "teto"),
-                  (-0.24, 1.61, "teto"), (0.10, 1.58, "vidro"), (0.86, 1.08, "lata"), (XF - 0.08, 0.90, "lata"),
-                  (XF, 0.86, None)],
-            cintura=[(XR, 1.16), (-1.50, 1.16), (0.86, 1.06), (XF, 1.06)],
-            larguras=[(XR, 0.85), (-1.25, 0.885), (0.95, 0.885), (XF, 0.83)],
-            janelas=[(-1.36, -0.08), (0.02, 0.82)], portas=[0.74, -0.06, -1.02])
     elif tipo == "picape":    # Strada cabine simples (2 portas) com capota marítima: 4,45 m, frente alta
         s.update(wb=2.74, fr=0.84, tr=0.82, W=0.865, R=0.33, larg=0.205, zb=0.24, belt=1.03, roof=1.55,
                  cover=True, santo=True, xc=-0.36)
@@ -1375,11 +1415,11 @@ def _anel_real(s, x, ponta=0.0, dz=0.0):
     ]
 
 
-def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
+def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5, aventura=False):
     materiais(M)
     materiais_real(M)
     tinta = pintura_mat(M, cor)
-    s = _spec_real(tipo)
+    s = _spec_real(tipo, aventura)
     root = vazio(name)
     xs = _estacoes_real(s)
     dzs = [0.0] * len(xs)
@@ -1454,8 +1494,30 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
     XF, XR = s["XF"], s["XR"]
     orn = []
     zfa = _interp(topo, XF - 0.20) - 0.075         # altura dos faróis: logo abaixo da borda do capô
-    # ---- faróis em lâmina (carcaça escura + DRL de LED na borda de cima) e grade
-    for sy in (1, -1):
+    if s["farol_duplo"]:
+        # SUV: DRL fino em cima (na borda do capô) e o farol de verdade num bloco escuro mais abaixo
+        for sy in (1, -1):
+            am = [_canto(XF, sy, W * (0.30 + 0.62 * t), zfa + 0.01, max(0, (t - 0.6) / 0.4) ** 1.5)
+                  for t in [k / 16 for k in range(17)]]
+            d = fita(f"{name}_drl{sy}", sup, am, 0.022, 0.006, M["r_drl"])
+            c = fita(f"{name}_drl_caixa{sy}", sup, am, 0.05, 0.003, M["r_farol_lente"])
+            bl = [_canto(XF, sy, W * (0.58 + 0.34 * t), zfa - 0.20, max(0, (t - 0.5) / 0.5) ** 1.5)
+                  for t in [k / 10 for k in range(11)]]
+            f = fita(f"{name}_farol{sy}", sup, bl, 0.11, 0.004, M["r_farol_lente"])
+            r_ = fita(f"{name}_refletor{sy}", sup, bl[1:8], 0.06, 0.007, M["r_farol_refletor"])
+            orn += [x for x in (d, c, f, r_) if x]
+        zg = zfa - 0.16
+        gr = fita(name + "_grade", sup, [((XF + 3, W * (-0.50 + 1.0 * k / 16), zg), (-1, 0, 0)) for k in range(17)],
+                  0.26, 0.006, M["r_preto_brilho"])
+        if gr:
+            orn.append(gr)
+        for q in range(4):
+            fl = fita(f"{name}_grade_filete{q}", sup, [((XF + 3, W * (-0.46 + 0.92 * k / 14), zg - 0.09 + 0.06 * q),
+                                                        (-1, 0, 0)) for k in range(15)], 0.01, 0.009,
+                      M["r_aluminio_escuro"])
+            if fl:
+                orn.append(fl)
+    for sy in ((1, -1) if not s["farol_duplo"] else ()):
         am = [_canto(XF, sy, W * (0.36 + 0.56 * t), zfa - 0.02 + 0.05 * t, max(0, (t - 0.55) / 0.45) ** 1.5)
               for t in [k / 16 for k in range(17)]]
         f = fita(f"{name}_farol{sy}", sup, am, lambda t: 0.05 + 0.045 * math.sin(math.pi * min(1, t * 1.3)),
@@ -1466,15 +1528,16 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
                   0.035, 0.006, M["r_farol_refletor"])
         orn += [x for x in (f, d, r_) if x]
     zg = zfa - 0.15
-    gr = fita(name + "_grade", sup, [((XF + 3, W * (-0.50 + 1.0 * k / 16), zg), (-1, 0, 0)) for k in range(17)],
-              lambda t: 0.19 - 0.06 * abs(2 * t - 1) ** 2, 0.006, M["r_preto_brilho"])
-    for q in range(3):   # filetes horizontais da grade
+    gr = None if s["farol_duplo"] else fita(name + "_grade", sup, [((XF + 3, W * (-0.50 + 1.0 * k / 16), zg),
+                                                                     (-1, 0, 0)) for k in range(17)],
+                                             lambda t: 0.19 - 0.06 * abs(2 * t - 1) ** 2, 0.006, M["r_preto_brilho"])
+    for q in (range(3) if not s["farol_duplo"] else ()):   # filetes horizontais da grade
         fl = fita(f"{name}_grade_filete{q}", sup, [((XF + 3, W * (-0.43 + 0.86 * k / 14), zg - 0.04 + 0.04 * q),
                                                     (-1, 0, 0)) for k in range(15)], 0.008, 0.009,
                   M["r_aluminio_escuro"])
         if fl:
             orn.append(fl)
-    friso = fita(name + "_friso", sup, [((XF + 3, W * (-0.40 + 0.80 * k / 12), zfa - 0.045), (-1, 0, 0))
+    friso = None if s["farol_duplo"] else fita(name + "_friso", sup, [((XF + 3, W * (-0.40 + 0.80 * k / 12), zfa - 0.045), (-1, 0, 0))
                                          for k in range(13)], 0.012, 0.009, M["r_cromo"])
     zi = s["zb"] + 0.20
     tomada = fita(name + "_tomada", sup, [((XF + 3, W * (-0.62 + 1.24 * k / 16), zi), (-1, 0, 0)) for k in range(17)],
@@ -1502,6 +1565,13 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
                                        for k in range(15)], 0.07, 0.002, M["r_plastico"], embute=0.02)
     if td:
         orn.append(td)
+    if s["protetor"]:   # protetor inferior prata na frente e atrás (cara de aventureiro)
+        for lado, sx, X in (("d", 1, XF), ("t", -1, XR)):
+            pr = fita(f"{name}_protetor_{lado}", sup, [((X + sx * 3, W * (-0.42 + 0.84 * k / 12), s["zb"] + 0.07),
+                                                       (-sx, 0, 0)) for k in range(13)],
+                      0.075, 0.006, M["r_aluminio"], embute=0.01)
+            if pr:
+                orn.append(pr)
     # ---- juntas de porta (frisos finos escuros) e maçanetas
     portas = s["portas"]
     for k, xp in enumerate(portas):
