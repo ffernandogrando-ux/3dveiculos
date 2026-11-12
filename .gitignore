@@ -29,3 +29,4 @@ assets/**
 !assets/**/*.sh
 !assets/**/*.py
 videos/_assets/_tmp/
+videos/*/_quadros*/
