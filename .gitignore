@@ -14,3 +14,5 @@ videos/_estilo3/_tmp/
 videos/_estilo4/_quadros_*/
 videos/_estilo4/_tmp/
 videos/*/_testes/
+videos/*/quadros_txt/
+videos/*/saida/
