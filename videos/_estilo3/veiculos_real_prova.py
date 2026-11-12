@@ -91,7 +91,7 @@ def estudio(cx=0.0, fundo_y=7.0, raio=3.5):
     mr.inputs["From Max"].default_value = 5.0
     nt.links.new(sep.outputs["Z"], mr.inputs["Value"])
     cr = nt.nodes.new("ShaderNodeValToRGB")
-    cr.color_ramp.elements[0].color = v3.lin("#2B2E33")
+    cr.color_ramp.elements[0].color = v3.lin("#1B1D20")
     cr.color_ramp.elements[1].position = 1.0
     cr.color_ramp.elements[1].color = v3.lin("#8C9299")
     nt.links.new(mr.outputs["Result"], cr.inputs["Fac"])
@@ -99,16 +99,18 @@ def estudio(cx=0.0, fundo_y=7.0, raio=3.5):
     rough = nt.nodes.new("ShaderNodeMapRange")    # piso acetinado (reflexo suave), parede fosca
     rough.inputs["From Min"].default_value = 0.0
     rough.inputs["From Max"].default_value = 0.6
-    rough.inputs["To Min"].default_value = 0.32
+    rough.inputs["To Min"].default_value = 0.38
     rough.inputs["To Max"].default_value = 0.9
     nt.links.new(sep.outputs["Z"], rough.inputs["Value"])
     nt.links.new(rough.outputs["Result"], b.inputs["Roughness"])
     v3._obj("estudio", bm, m)
 
 
-def luz(nome, pos, alvo, energia, sx, sy=None, cor="#FFFFFF"):
+def luz(nome, pos, alvo, energia, sx, sy=None, cor="#FFFFFF", spread=None):
     d = bpy.data.lights.new(nome, "AREA")
     d.energy = energia
+    if spread:
+        d.spread = math.radians(spread)   # luz direcionada: não derrama no piso
     d.shape = "RECTANGLE"
     d.size = sx
     d.size_y = sy if sy else sx
@@ -123,10 +125,23 @@ def luz(nome, pos, alvo, energia, sx, sy=None, cor="#FFFFFF"):
 def luzes(cx, larg, k=1.0):
     """Softbox grande em cima (faixa longa ao longo da fila), 2 recortes atrás e um preenchimento baixo."""
     luz("softbox", (cx, -0.6, 4.2), (cx, -0.4, 0), 2600 * k * larg / 10, larg, 3.2, "#FFFFFF")
-    luz("rim_e", (cx - larg * 0.55, 3.5, 1.6), (cx - larg * 0.2, 0, 0.5), 900 * k, 0.6, 3.0, "#EAF1FF")
-    luz("rim_d", (cx + larg * 0.55, 3.5, 1.6), (cx + larg * 0.2, 0, 0.5), 900 * k, 0.6, 3.0, "#EAF1FF")
+    luz("rim_e", (cx - larg * 0.35, 4.5, 2.6), (cx - larg * 0.15, 0, 0.6), 900 * k, 0.5, 2.5, "#EAF1FF")
+    luz("rim_d", (cx + larg * 0.35, 4.5, 2.6), (cx + larg * 0.15, 0, 0.6), 900 * k, 0.5, 2.5, "#EAF1FF")
     luz("fill", (cx, -9.0, 0.9), (cx, 0, 0.5), 260 * k * larg / 10, larg * 0.9, 0.8, "#FFF4E8")
     luz("fundo", (cx, 2.2, 0.4), (cx, 7.0, 2.6), 700 * k, larg * 0.8, 0.6, "#FFFFFF")
+
+
+def so_nos_veiculos(raizes):
+    """Light linking: as luzes de recorte iluminam só os veículos (não fazem poça de luz no piso)."""
+    col = bpy.data.collections.new("alvo_recorte")
+    for r in raizes:
+        for o in [r] + list(r.children_recursive):
+            if o.type == "MESH":
+                col.objects.link(o)
+    for nome in ("rim_e", "rim_d"):
+        lo = bpy.data.objects.get(nome)
+        if lo is not None and hasattr(lo, "light_linking"):
+            lo.light_linking.receiver_collection = col
 
 
 def camera(pos, alvo, lens=60):
@@ -171,16 +186,19 @@ def cena_carros(amostras, escala):
     nova_cena((int(2000 * escala), int(760 * escala)), amostras)
     M = {}
     lista = [("hatch", "#D7262E"), ("suv", "#4A5058"), ("picape", "#F2F2EE"), ("seda", "#1F4E9C")]
-    passo = 2.45
+    passo = 2.62
+    raizes = []
     for k, (tipo, cor) in enumerate(lista):
         D = v3.carro(f"car_{tipo}", M, tipo, cor, estilo="real", escala=0.5)
         D["raiz"].location = ((k - 1.5) * passo, 0, 0)
         D["raiz"].rotation_euler = (0, 0, math.radians(-30))
         bpy.context.view_layer.update()
         print(tipo, "interpenetração (vértices):", checar_rodas(D))
+        raizes.append(D["raiz"])
     estudio()
     luzes(0, 12)
-    camera((0.0, -14.0, 1.9), (0, 0, 0.40), lens=50)
+    so_nos_veiculos(raizes)
+    camera((0.0, -15.2, 1.45), (0, 0, 0.36), lens=52)
     render(os.path.join(HERE, "carros_real.png"))
 
 
@@ -188,16 +206,19 @@ def cena_motos(amostras, escala):
     nova_cena((int(1800 * escala), int(760 * escala)), amostras)
     M = {}
     lista = [("street", "#D7262E"), ("trail", "#16181B"), ("cub", "#F2F2EE")]
-    passo = 1.45
+    passo = 1.30
+    raizes = []
     for k, (tipo, cor) in enumerate(lista):
         D = v3.moto(f"moto_{tipo}", M, tipo, cor, estilo="real", escala=0.5)
         D["raiz"].location = ((k - 1) * passo, 0, 0)
         D["raiz"].rotation_euler = (0, 0, math.radians(-28))
         bpy.context.view_layer.update()
         print(tipo, "interpenetração (vértices):", checar_rodas(D))
+        raizes.append(D["raiz"])
     estudio()
     luzes(0, 6, 0.6)
-    camera((0.0, -8.6, 1.5), (0, 0, 0.33), lens=55)
+    so_nos_veiculos(raizes)
+    camera((0.0, -6.0, 0.95), (0, 0, 0.30), lens=55)
     render(os.path.join(HERE, "motos_real.png"))
 
 
