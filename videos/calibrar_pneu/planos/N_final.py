@@ -61,8 +61,8 @@ luz((1.8, 1.2, 2.2), 900, 1.0, "#CFE0FF")
 cd = bpy.data.cameras.new("cam"); cd.lens = 70
 cd.dof.use_dof = True; cd.dof.focus_distance = 1.9; cd.dof.aperture_fstop = 2.8
 cam = mt.link(bpy.data.objects.new("cam", cd)); sc.camera = cam
-alvo = Vector((0, 0, 1.45))
-for t_, d in ((0.0, 2.0), (D, 1.82)):          # push-in ~9 %
+alvo = Vector((0.1, 0, 1.42))
+for t_, d in ((0.0, 2.6), (D, 2.38)):          # push-in ~9 %
     cam.location = alvo + Vector((-0.32, -1.0, 0.05)).normalized() * d
     cam.rotation_mode = "QUATERNION"
     cam.rotation_quaternion = (alvo - cam.location).to_track_quat("-Z", "Y")

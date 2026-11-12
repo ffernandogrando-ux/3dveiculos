@@ -79,9 +79,10 @@ def materiais(M):
 
 
 # ================================================================ rosto adulto pintado
-def _rosto(name, P):
+def _rosto(name, P, cor=None):
     """Material da cabeça (origem no centro, frente -y): pele, olhos amendoados com íris/pupila/pálpebra, sobrancelhas
     grossas, lábios, barba por fazer. P: valores iniciais dos nós animáveis."""
+    CR = dict(COR, **(cor or {}))
     m = bpy.data.materials.new(name)
     m.use_nodes = True
     nt = m.node_tree
@@ -168,7 +169,7 @@ def _rosto(name, P):
     bx = op("DIVIDE", X, larg)
     labio = dentro(op("ADD", op("POWER", op("ABSOLUTE", bx), 4.0), op("POWER", op("DIVIDE", zb, 0.0055), 2.0)), 0.3)
     fenda = dentro(op("ADD", op("POWER", op("ABSOLUTE", op("DIVIDE", X, larg * 0.95)), 4.0),
-                       op("POWER", op("DIVIDE", zb, op("ADD", 0.0011, op("MULTIPLY", abert, 0.009))), 2.0)), 0.3)
+                       op("POWER", op("DIVIDE", zb, op("ADD", 0.0011, op("MULTIPLY", abert, 0.016))), 2.0)), 0.3)
     # barba por fazer: ruído fino só no queixo/maxilar/buço
     tex = nt.nodes.new("ShaderNodeTexNoise")
     tex.inputs["Scale"].default_value = 900.0
@@ -177,7 +178,7 @@ def _rosto(name, P):
     # região em degradê (sem linha dura): cresce de z=-0,03 a -0,06 e some perto do nariz/olhos
     reg = op("MINIMUM", op("MAXIMUM", op("DIVIDE", op("SUBTRACT", -0.03, Zs), 0.03), 0.0), 1.0)
     reg = op("MULTIPLY", reg, op("SUBTRACT", 1.0, labio))
-    barba = op("MULTIPLY", op("MULTIPLY", reg, op("GREATER_THAN", tex.outputs["Fac"], 0.48)), 0.26)
+    barba = op("MULTIPLY", op("MULTIPLY", reg, op("GREATER_THAN", tex.outputs["Fac"], 0.48)), CR.get("barba_forca", 0.26))
 
     def mix(base, f, hexcol, sock=None):
         n = nt.nodes.new("ShaderNodeMix"); n.data_type = "RGBA"
@@ -189,17 +190,17 @@ def _rosto(name, P):
         n.inputs["B"].default_value = lin(hexcol)
         return n.outputs[2]
 
-    c = COR["pele"]
-    c = mix(c, op("MULTIPLY", olheira, op("SUBTRACT", 1.0, olho)), "#B5735A")
-    c = mix(c, barba, COR["barba"])
-    c = mix(c, op("MULTIPLY", labio, 0.85), COR["labio"])
+    c = CR["pele"]
+    c = mix(c, op("MULTIPLY", olheira, op("SUBTRACT", 1.0, olho)), CR.get("olheira", "#B5735A"))
+    c = mix(c, barba, CR["barba"])
+    c = mix(c, op("MULTIPLY", labio, 0.85), CR["labio"])
     c = mix(c, fenda, "#4A1E1E")
     c = mix(c, olho, "#F2EEE6")
-    c = mix(c, op("MINIMUM", iris, 1.0), COR["iris"])
+    c = mix(c, op("MINIMUM", iris, 1.0), CR["iris"])
     c = mix(c, op("MINIMUM", op("MAXIMUM", op("SUBTRACT", iris, 1.0), 0.0), 1.0), "#0E0A08")
     c = mix(c, luz, "#FFFFFF")
     c = mix(c, palp, "#1E1410")
-    c = mix(c, sob, COR["sobr"])
+    c = mix(c, sob, CR["sobr"])
     b = nt.nodes.new("ShaderNodeBsdfPrincipled")
     nt.links.new(c, b.inputs["Base Color"])
     b.inputs["Roughness"].default_value = 0.5
@@ -245,7 +246,7 @@ def _cabeca_malha(name, m):
     return o
 
 
-def _cabelo_malha(name, m):
+def _cabelo_malha(name, m, corte="curto"):
     """Cabelo curto colado na cabeça (mesma forma, inflada 5 mm), da linha da testa para cima e para trás."""
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=40, radius=1.0)
@@ -260,6 +261,10 @@ def _cabelo_malha(name, m):
         topo = min(max((z - 0.2) / 0.6, 0.0), 1.0)
         topete = 1.0 if (y < -0.45 and z > 0.5) else 0.0
         infla = 0.006 + 0.016 * topo + 0.014 * topete * topo
+        if corte == "alto":            # volume no alto (topete penteado para trás)
+            infla = 0.008 + 0.03 * topo + 0.012 * topete * topo
+        elif corte == "raspado":       # máquina: rente, quase só cor
+            infla = 0.003 + 0.004 * topo
         v.co = _forma(x, y, z) + n * infla
     bmesh.ops.delete(bm, geom=apagar, context="VERTS")
     o = _liso(mt.mesh_obj(name, bm, m))
@@ -314,11 +319,11 @@ def girar(arm, osso, x=0.0, y=0.0, z=0.0):
 
 
 # ================================================================ mãos
-def _mao(name, M, tipo, s, pulso):
+def _mao(name, M, tipo, s, pulso, pele=None):
     """Mão adulta (pele) no pulso apontando para -z: palma + 4 dedos + polegar. tipo: relaxada | aponta | aberta |
     punho. s = +1 mão esquerda (+x), -1 direita."""
     px, py, pz = pulso
-    pele = M["ad_pele"]
+    pele = pele or M["ad_pele"]
     obs = [skin(f"{name}_palma", [(px, py, pz + 0.01), (px + s * 0.004, py - 0.006, pz - 0.075)], [(0, 1)],
                 [(0.04, 0.022), (0.046, 0.021)], pele)]
     # dedos: (offset lateral na palma, comprimento)
@@ -356,33 +361,129 @@ POSES = {
 }
 
 
-# ================================================================ o Zé adulto
-def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0)):
-    """Mecânico Zé, ~40 anos, 1,79 m. pose: parado | aponta | explica | bracos_cruzados | conta.
-    expressao: neutro | sorriso | fala | preocupado | surpreso."""
+# ================================================================ o Zé adulto (e o motorista "civil")
+EXPRESSOES = {
+    "neutro": dict(sorriso=0.15), "sorriso": dict(sorriso=0.9),
+    "fala": dict(sorriso=0.35, boca_aberta=0.8, sobr_alt=0.5),
+    "preocupado": dict(sorriso=-0.4, sobr_inc=-0.35, sobr_alt=0.6),
+    "surpreso": dict(sorriso=0.0, boca_aberta=1.0, sobr_alt=1.4, abre_olho=1.25),
+    "bravo": dict(sorriso=-0.6, sobr_inc=0.45, sobr_alt=-0.6, abre_olho=0.85, boca_aberta=0.35),
+    "careta": dict(sorriso=-0.35, sobr_inc=0.2, sobr_alt=-0.2, abre_olho=0.6),       # desconfiado, olho apertado
+    "desdem": dict(sorriso=-0.15, sobr_alt=0.9, abre_olho=0.8),                      # "tá bom ainda"
+}
+
+TIPOS_MAO = ("relaxada", "aponta", "aberta", "punho")
+
+
+def _mats_pessoa(M, roupa, pele, cabelo, camisa, calca):
+    """Materiais de quem não é o Zé (pele/cabelo/roupa por parâmetro), guardados em M por cor."""
     materiais(M)
+
+    def get(chave, fab):
+        if chave not in M:
+            M[chave] = fab()
+        return M[chave]
+
+    R = {"pele": M["ad_pele"] if pele == COR["pele"] else get("ad_pele_" + pele, lambda: _pbr(
+             "ad_pele_" + pele, pele, rough=0.5, sss=0.08)),
+         "cabelo": M["ad_cabelo"] if cabelo == COR["cabelo"] else get("ad_cabelo_" + cabelo, lambda: _tecido(
+             "ad_cabelo_" + cabelo, cabelo, rough=0.7))}
+    if roupa == "civil":
+        R["camisa"] = get("ad_camisa_" + camisa, lambda: _tecido("ad_camisa_" + camisa, camisa, rough=0.8))
+        esc = "#%02X%02X%02X" % tuple(int(int(camisa[i:i + 2], 16) * 0.72) for i in (1, 3, 5))
+        R["camisa_esc"] = get("ad_camisa_" + esc, lambda: _tecido("ad_camisa_" + esc, esc, rough=0.8))
+        R["calca"] = get("ad_jeans_" + calca, lambda: _jeans("ad_jeans_" + calca, calca))
+        R["tenis"] = get("ad_tenis", lambda: _pbr("ad_tenis", "#30343B", rough=0.6))
+        R["tenis_sola"] = get("ad_tenis_sola", lambda: _pbr("ad_tenis_sola", "#ECE9E2", rough=0.55))
+        R["botao"] = get("ad_botao", lambda: _pbr("ad_botao", "#ECE9E2", rough=0.4))
+    return R
+
+
+def _jeans(name, hexcol):
+    """Brim: tecido com trama diagonal fina (ruído esticado) e leve variação de tom (desbotado)."""
+    m = _tecido(name, hexcol, rough=0.9)
+    nt = m.node_tree
+    b = mt.bsdf(m)
+    tx = nt.nodes.new("ShaderNodeTexNoise")
+    tx.inputs["Scale"].default_value = 6.0
+    rp = nt.nodes.new("ShaderNodeValToRGB")
+    c = lin(hexcol)
+    rp.color_ramp.elements[0].color = [x * 0.8 for x in c[:3]] + [1]
+    rp.color_ramp.elements[1].color = [min(1.0, x * 1.25) for x in c[:3]] + [1]
+    nt.links.new(tx.outputs["Fac"], rp.inputs["Fac"])
+    nt.links.new(rp.outputs["Color"], b.inputs["Base Color"])
+    return m
+
+
+def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roupa="macacao",
+              camisa="#B5452F", calca="#3A5A86", pele=None, cabelo=None, corte="curto", barba=0.26,
+              maos="pose"):
+    """Mecânico Zé, ~40 anos, 1,79 m. pose: parado | aponta | explica | bracos_cruzados | conta.
+    expressao: neutro | sorriso | fala | preocupado | surpreso | bravo | careta | desdem.
+    roupa="civil": outra pessoa (o motorista): camisa polo (cor `camisa`), calça jeans (`calca`), tênis.
+    pele / cabelo (hex) e corte ("curto" | "alto" | "raspado") mudam a pessoa; barba = força da barba por fazer.
+    maos="pose": só as mãos da pose; maos="todas": cria as 4 (relaxada, aponta, aberta, punho) de cada lado e mostra
+    as da pose; troque no tempo com mao(Z, "e", "aberta", quadro). Z["maos"][lado][tipo] = lista de objetos."""
+    materiais(M)
+    pele = pele or COR["pele"]
+    cabelo = cabelo or COR["cabelo"]
+    civil = roupa == "civil"
+    MP = _mats_pessoa(M, roupa, pele, cabelo, camisa, calca)
+    m_pele = MP["pele"]
     root = empty(name)
     Z = {"raiz": root}
     arm = _armature(name + "_esqueleto", root)
     Z["arm"] = arm
-    # ---- macacão: tronco + pernas + mangas até o cotovelo (manga arregaçada)
-    P = [(0, 0, 0.95), (0, -0.02, 1.06), (0, 0, 1.24), (0, 0, 1.38), (0, 0, 1.47),           # 0-4 quadril..pescoço
-         (0.105, 0, 0.9), (0.11, 0, 0.72), (0.11, -0.005, 0.5), (0.11, 0.005, 0.36), (0.115, 0, 0.16),   # 5-9
-         (-0.105, 0, 0.9), (-0.11, 0, 0.72), (-0.11, -0.005, 0.5), (-0.11, 0.005, 0.36), (-0.115, 0, 0.16),
-         (0.2, 0.0, 1.37), (0.228, 0.01, 1.25), (0.245, 0.01, 1.13),                       # 15-17 manga esq.
-         (-0.2, 0.0, 1.37), (-0.228, 0.01, 1.25), (-0.245, 0.01, 1.13)]                    # 18-20
-    A = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8), (8, 9), (0, 10), (10, 11), (11, 12),
-         (12, 13), (13, 14), (3, 15), (15, 16), (16, 17), (3, 18), (18, 19), (19, 20)]
-    Rr = [(0.175, 0.135), (0.18, 0.155), (0.205, 0.15), (0.2, 0.13), (0.07, 0.065),
-          (0.1, 0.098), (0.095, 0.093), (0.068, 0.068), (0.074, 0.074), (0.085, 0.085),
-          (0.1, 0.098), (0.095, 0.093), (0.068, 0.068), (0.074, 0.074), (0.085, 0.085),
-          (0.078, 0.07), (0.06, 0.058), (0.057, 0.057), (0.078, 0.07), (0.06, 0.058), (0.057, 0.057)]
-    G = ["quadril", "quadril", "tronco", "tronco", "pescoco",
-         "quadril", "coxa_e", "canela_e", "canela_e", "canela_e",
-         "quadril", "coxa_d", "canela_d", "canela_d", "canela_d",
-         "tronco", "ombro_e", "cotovelo_e", "tronco", "ombro_d", "cotovelo_d"]
-    corpo = skin(name + "_macacao", P, A, Rr, M["ad_macacao"], parent=root)
-    _deforma(corpo, arm, G)
+    if not civil:
+        # ---- macacão: tronco + pernas + mangas até o cotovelo (manga arregaçada)
+        P = [(0, 0, 0.95), (0, -0.02, 1.06), (0, 0, 1.24), (0, 0, 1.38), (0, 0, 1.47),           # 0-4 quadril..pescoço
+             (0.105, 0, 0.9), (0.11, 0, 0.72), (0.11, -0.005, 0.5), (0.11, 0.005, 0.36), (0.115, 0, 0.16),   # 5-9
+             (-0.105, 0, 0.9), (-0.11, 0, 0.72), (-0.11, -0.005, 0.5), (-0.11, 0.005, 0.36), (-0.115, 0, 0.16),
+             (0.2, 0.0, 1.37), (0.228, 0.01, 1.25), (0.245, 0.01, 1.13),                       # 15-17 manga esq.
+             (-0.2, 0.0, 1.37), (-0.228, 0.01, 1.25), (-0.245, 0.01, 1.13)]                    # 18-20
+        A = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8), (8, 9), (0, 10), (10, 11), (11, 12),
+             (12, 13), (13, 14), (3, 15), (15, 16), (16, 17), (3, 18), (18, 19), (19, 20)]
+        Rr = [(0.175, 0.135), (0.18, 0.155), (0.205, 0.15), (0.2, 0.13), (0.07, 0.065),
+              (0.1, 0.098), (0.095, 0.093), (0.068, 0.068), (0.074, 0.074), (0.085, 0.085),
+              (0.1, 0.098), (0.095, 0.093), (0.068, 0.068), (0.074, 0.074), (0.085, 0.085),
+              (0.078, 0.07), (0.06, 0.058), (0.057, 0.057), (0.078, 0.07), (0.06, 0.058), (0.057, 0.057)]
+        G = ["quadril", "quadril", "tronco", "tronco", "pescoco",
+             "quadril", "coxa_e", "canela_e", "canela_e", "canela_e",
+             "quadril", "coxa_d", "canela_d", "canela_d", "canela_d",
+             "tronco", "ombro_e", "cotovelo_e", "tronco", "ombro_d", "cotovelo_d"]
+        corpo = skin(name + "_macacao", P, A, Rr, M["ad_macacao"], parent=root)
+        _deforma(corpo, arm, G)
+        m_trap = M["ad_macacao"]
+    else:
+        # ---- camisa polo (tronco + manga curta) e calça jeans (quadril + pernas) em malhas separadas
+        P = [(0, 0, 0.925), (0, -0.016, 1.06), (0, 0, 1.24), (0, 0, 1.38), (0, 0, 1.47),
+             (0.2, 0.0, 1.37), (0.226, 0.01, 1.255), (-0.2, 0.0, 1.37), (-0.226, 0.01, 1.255)]
+        A = [(0, 1), (1, 2), (2, 3), (3, 4), (3, 5), (5, 6), (3, 7), (7, 8)]
+        Rr = [(0.182, 0.142), (0.18, 0.15), (0.2, 0.145), (0.198, 0.128), (0.07, 0.065),
+              (0.074, 0.068), (0.064, 0.06), (0.074, 0.068), (0.064, 0.06)]
+        G = ["quadril", "quadril", "tronco", "tronco", "pescoco", "tronco", "ombro_e", "tronco", "ombro_d"]
+        corpo = skin(name + "_camisa", P, A, Rr, MP["camisa"], parent=root)
+        _deforma(corpo, arm, G)
+        PJ = [(0, 0, 0.97), (0.1, 0, 0.9), (0.105, 0, 0.72), (0.108, -0.004, 0.5), (0.11, 0.004, 0.33),
+              (0.112, 0, 0.14), (-0.1, 0, 0.9), (-0.105, 0, 0.72), (-0.108, -0.004, 0.5), (-0.11, 0.004, 0.33),
+              (-0.112, 0, 0.14)]
+        AJ = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (0, 6), (6, 7), (7, 8), (8, 9), (9, 10)]
+        RJ = [(0.168, 0.128), (0.098, 0.096), (0.09, 0.088), (0.064, 0.064), (0.064, 0.064), (0.07, 0.07),
+              (0.098, 0.096), (0.09, 0.088), (0.064, 0.064), (0.064, 0.064), (0.07, 0.07)]
+        GJ = ["quadril", "quadril", "coxa_e", "canela_e", "canela_e", "canela_e",
+              "quadril", "coxa_d", "canela_d", "canela_d", "canela_d"]
+        calca_o = skin(name + "_calca", PJ, AJ, RJ, MP["calca"], parent=root)
+        _deforma(calca_o, arm, GJ)
+        Z["calca"] = calca_o
+        # braço (pele) da manga curta até o cotovelo
+        for l, s in (("e", 1), ("d", -1)):
+            bs = skin(f"{name}_braco_{l}", [(s * 0.224, 0.01, 1.3), (s * 0.245, 0.01, 1.13)], [(0, 1)],
+                      [(0.05, 0.048), (0.047, 0.045)], m_pele, parent=root)
+            _deforma(bs, arm, [f"ombro_{l}", f"cotovelo_{l}"])
+            bm_ = skin(f"{name}_barra_manga_{l}", [(s * 0.222, 0.01, 1.27), (s * 0.227, 0.01, 1.245)], [(0, 1)],
+                       [(0.067, 0.063), (0.066, 0.062)], MP["camisa_esc"], parent=root)
+            _deforma(bm_, arm, [f"ombro_{l}", f"ombro_{l}"])
+        m_trap = MP["camisa"]
     tx = bpy.data.textures.new(name + "_dobras", "CLOUDS")
     tx.noise_scale = 0.08
     dp = corpo.modifiers.new("dobras", "DISPLACE")
@@ -391,64 +492,91 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0)):
     dp.mid_level = 0.5
     dp.texture_coords = "LOCAL"
     Z["corpo"] = corpo
-    # trapézios e cós (cintura) do macacão
+    # trapézios (e, no macacão, o cós da cintura)
     for s_ in (1, -1):
         tp = skin(f"{name}_trapezio{s_}", [(0, 0.02, 1.47), (s_ * 0.13, 0.012, 1.41)], [(0, 1)],
-                  [(0.055, 0.05), (0.06, 0.05)], M["ad_macacao"], parent=root)
+                  [(0.055, 0.05), (0.06, 0.05)], m_trap, parent=root)
         _deforma(tp, arm, ["pescoco", "tronco"])
-    cos = skin(name + "_cos", [(0, -0.008, 0.955), (0, -0.008, 0.99)], [(0, 1)], [(0.186, 0.148), (0.186, 0.15)],
-               M["ad_macacao_esc"], parent=root)
-    _deforma(cos, arm, ["quadril", "quadril"])
-    # antebraços (pele) saindo da manga arregaçada + dobra da manga
+    if not civil:
+        cos = skin(name + "_cos", [(0, -0.008, 0.955), (0, -0.008, 0.99)], [(0, 1)], [(0.186, 0.148), (0.186, 0.15)],
+                   M["ad_macacao_esc"], parent=root)
+        _deforma(cos, arm, ["quadril", "quadril"])
+    # antebraços (pele) + dobra da manga arregaçada (só macacão)
     for l, s in (("e", 1), ("d", -1)):
         ab = skin(f"{name}_antebraco_{l}", [(s * 0.243, 0.01, 1.16), (s * 0.255, 0.0, 1.0), (s * 0.265, -0.005, 0.86)],
-                  [(0, 1), (1, 2)], [(0.048, 0.046), (0.046, 0.042), (0.037, 0.031)], M["ad_pele"], parent=root)
+                  [(0, 1), (1, 2)], [(0.048, 0.046), (0.046, 0.042), (0.037, 0.031)], m_pele, parent=root)
         _deforma(ab, arm, [f"cotovelo_{l}", f"cotovelo_{l}", f"mao_{l}"])
-        dobra = skin(f"{name}_dobra_{l}", [(s * 0.243, 0.01, 1.15), (s * 0.247, 0.01, 1.11)], [(0, 1)],
-                     [(0.062, 0.06), (0.062, 0.06)], M["ad_macacao_esc"], parent=root)
-        _deforma(dobra, arm, [f"cotovelo_{l}", f"cotovelo_{l}"])
+        if not civil:
+            dobra = skin(f"{name}_dobra_{l}", [(s * 0.243, 0.01, 1.15), (s * 0.247, 0.01, 1.11)], [(0, 1)],
+                         [(0.062, 0.06), (0.062, 0.06)], M["ad_macacao_esc"], parent=root)
+            _deforma(dobra, arm, [f"cotovelo_{l}", f"cotovelo_{l}"])
     # pescoço
     pc = skin(name + "_pescoco", [(0, 0.008, 1.43), (0, 0.008, 1.535)], [(0, 1)], [(0.074, 0.07), (0.07, 0.066)],
-              M["ad_pele"], parent=root)
+              m_pele, parent=root)
     _deforma(pc, arm, ["tronco", "pescoco"])
-    # gola com camiseta, faixas refletivas laranja (canelas e braços), bolso, pano, botas
-    tronco = []
-    tronco.append(skin(name + "_gola", [(-0.06, -0.03, 1.455), (0, -0.065, 1.42), (0.06, -0.03, 1.455)],
-                       [(0, 1), (1, 2)], [(0.018, 0.01), (0.022, 0.012), (0.018, 0.01)], M["ad_camiseta"]))
-    for s in (1, -1):
-        tronco.append(skin(f"{name}_lapela{s}", [(s * 0.03, -0.085, 1.43), (s * 0.08, -0.07, 1.47)], [(0, 1)],
-                           [(0.03, 0.006), (0.024, 0.006)], M["ad_macacao_esc"]))
-    bo = mt.box(name + "_bolso", -0.045, 0.045, -0.006, 0.006, -0.05, 0.035, M["ad_macacao_esc"], anchor="center")
-    bo.location = (0.08, -0.112, 1.3)
-    _bevel(bo, 0.006)
-    tronco.append(bo)
-    tag = mt.box(name + "_tag", -0.035, 0.035, -0.003, 0.003, -0.012, 0.012, M["ad_faixa"], anchor="center")
-    tag.location = (-0.085, -0.114, 1.33)
-    _bevel(tag, 0.003)
-    tronco.append(tag)
-    quadril = [skin(name + "_pano", [(-0.08, 0.1, 0.94), (-0.09, 0.122, 0.85), (-0.095, 0.12, 0.76)],
-                    [(0, 1), (1, 2)], [(0.035, 0.008), (0.032, 0.008), (0.028, 0.008)], M["ad_pano"])]
+    tronco, quadril = [], []
     canelas = {"e": [], "d": []}
-    for l, x in (("e", 0.115), ("d", -0.115)):
-        c = canelas[l]
-        c.append(skin(f"{name}_faixa_perna_{l}", [(x, 0, 0.3), (x, 0, 0.34)], [(0, 1)],
-                      [(0.078, 0.078), (0.078, 0.078)], M["ad_faixa"]))
-        c.append(skin(f"{name}_refl_perna_{l}", [(x, 0, 0.312), (x, 0, 0.328)], [(0, 1)],
-                      [(0.0792, 0.0792), (0.0792, 0.0792)], M["ad_refletivo"]))
-        c.append(skin(f"{name}_barra_{l}", [(x, 0, 0.13), (x, 0, 0.165)], [(0, 1)], [(0.088, 0.088), (0.087, 0.087)],
-                      M["ad_macacao_esc"]))
-        c.append(skin(f"{name}_bota_{l}", [(x, 0.02, 0.14), (x, -0.005, 0.06), (x, -0.13, 0.05)],
-                      [(0, 1), (1, 2)], [(0.07, 0.07), (0.074, 0.054), (0.06, 0.042)], M["ad_bota"]))
-        c.append(skin(f"{name}_sola_{l}", [(x, 0.035, 0.014), (x, -0.15, 0.014)], [(0, 1)],
-                      [(0.07, 0.014), (0.064, 0.014)], M["ad_sola"]))
-        # bolso de chapa na lateral da coxa
-        bc = mt.box(f"{name}_bolso_coxa_{l}", -0.006, 0.006, -0.05, 0.05, -0.06, 0.06, M["ad_macacao_esc"],
-                    anchor="center")
-        bc.location = (x + (0.098 if x > 0 else -0.098), 0, 0.7)
-        _bevel(bc, 0.005)
-        c_coxa = bc
-        c_coxa.parent = root
-        _no_osso(c_coxa, arm, f"coxa_{l}")
+    if not civil:
+        # gola com camiseta, faixas refletivas laranja (canelas e braços), bolso, pano, botas
+        tronco.append(skin(name + "_gola", [(-0.06, -0.03, 1.455), (0, -0.065, 1.42), (0.06, -0.03, 1.455)],
+                           [(0, 1), (1, 2)], [(0.018, 0.01), (0.022, 0.012), (0.018, 0.01)], M["ad_camiseta"]))
+        for s in (1, -1):
+            tronco.append(skin(f"{name}_lapela{s}", [(s * 0.03, -0.085, 1.43), (s * 0.08, -0.07, 1.47)], [(0, 1)],
+                               [(0.03, 0.006), (0.024, 0.006)], M["ad_macacao_esc"]))
+        bo = mt.box(name + "_bolso", -0.045, 0.045, -0.006, 0.006, -0.05, 0.035, M["ad_macacao_esc"], anchor="center")
+        bo.location = (0.08, -0.112, 1.3)
+        _bevel(bo, 0.006)
+        tronco.append(bo)
+        tag = mt.box(name + "_tag", -0.035, 0.035, -0.003, 0.003, -0.012, 0.012, M["ad_faixa"], anchor="center")
+        tag.location = (-0.085, -0.114, 1.33)
+        _bevel(tag, 0.003)
+        tronco.append(tag)
+        quadril.append(skin(name + "_pano", [(-0.08, 0.1, 0.94), (-0.09, 0.122, 0.85), (-0.095, 0.12, 0.76)],
+                            [(0, 1), (1, 2)], [(0.035, 0.008), (0.032, 0.008), (0.028, 0.008)], M["ad_pano"]))
+        for l, x in (("e", 0.115), ("d", -0.115)):
+            c = canelas[l]
+            c.append(skin(f"{name}_faixa_perna_{l}", [(x, 0, 0.3), (x, 0, 0.34)], [(0, 1)],
+                          [(0.078, 0.078), (0.078, 0.078)], M["ad_faixa"]))
+            c.append(skin(f"{name}_refl_perna_{l}", [(x, 0, 0.312), (x, 0, 0.328)], [(0, 1)],
+                          [(0.0792, 0.0792), (0.0792, 0.0792)], M["ad_refletivo"]))
+            c.append(skin(f"{name}_barra_{l}", [(x, 0, 0.13), (x, 0, 0.165)], [(0, 1)],
+                          [(0.088, 0.088), (0.087, 0.087)], M["ad_macacao_esc"]))
+            c.append(skin(f"{name}_bota_{l}", [(x, 0.02, 0.14), (x, -0.005, 0.06), (x, -0.13, 0.05)],
+                          [(0, 1), (1, 2)], [(0.07, 0.07), (0.074, 0.054), (0.06, 0.042)], M["ad_bota"]))
+            c.append(skin(f"{name}_sola_{l}", [(x, 0.035, 0.014), (x, -0.15, 0.014)], [(0, 1)],
+                          [(0.07, 0.014), (0.064, 0.014)], M["ad_sola"]))
+            # bolso de chapa na lateral da coxa
+            bc = mt.box(f"{name}_bolso_coxa_{l}", -0.006, 0.006, -0.05, 0.05, -0.06, 0.06, M["ad_macacao_esc"],
+                        anchor="center")
+            bc.location = (x + (0.098 if x > 0 else -0.098), 0, 0.7)
+            _bevel(bc, 0.005)
+            bc.parent = root
+            _no_osso(bc, arm, f"coxa_{l}")
+    else:
+        # gola polo (colarinho deitado), carcela com 2 botões, barra da camisa, barra do jeans e tênis
+        tronco.append(skin(name + "_gola", [(-0.07, 0.02, 1.47), (-0.065, -0.04, 1.455), (0, -0.075, 1.425),
+                                             (0.065, -0.04, 1.455), (0.07, 0.02, 1.47)],
+                           [(0, 1), (1, 2), (2, 3), (3, 4)],
+                           [(0.022, 0.009), (0.024, 0.01), (0.026, 0.01), (0.024, 0.01), (0.022, 0.009)],
+                           MP["camisa_esc"]))
+        cr = mt.box(name + "_carcela", -0.016, 0.016, -0.004, 0.004, -0.06, 0.0, MP["camisa_esc"], anchor="center")
+        cr.location = (0, -0.128, 1.4)
+        cr.rotation_euler = (math.radians(-12), 0, 0)
+        _bevel(cr, 0.003)
+        tronco.append(cr)
+        for k in range(2):
+            tronco.append(esfera(f"{name}_botao{k}", 0.0055, (0, -0.134, 1.385 - k * 0.032), MP["botao"],
+                                 scale=(1, 0.5, 1), seg=12))
+        quadril.append(skin(name + "_barra_camisa", [(0, -0.002, 0.915), (0, -0.002, 0.94)], [(0, 1)],
+                            [(0.188, 0.148), (0.187, 0.147)], MP["camisa_esc"]))
+        for l, x in (("e", 0.112), ("d", -0.112)):
+            c = canelas[l]
+            c.append(skin(f"{name}_barra_{l}", [(x, 0, 0.125), (x, 0, 0.15)], [(0, 1)],
+                          [(0.074, 0.074), (0.073, 0.073)], MP["calca"]))
+            c.append(skin(f"{name}_tenis_{l}", [(x, 0.025, 0.12), (x, -0.005, 0.06), (x, -0.135, 0.048)],
+                          [(0, 1), (1, 2)], [(0.062, 0.062), (0.07, 0.05), (0.058, 0.04)], MP["tenis"]))
+            c.append(skin(f"{name}_sola_{l}", [(x, 0.04, 0.02), (x, -0.155, 0.02)], [(0, 1)],
+                          [(0.068, 0.02), (0.062, 0.02)], MP["tenis_sola"]))
     for l in ("e", "d"):
         for o in canelas[l]:
             o.parent = root
@@ -460,35 +588,37 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0)):
         o.parent = root
         _no_osso(o, arm, "quadril")
     # ---- cabeça
-    P0 = {"neutro": dict(sorriso=0.15), "sorriso": dict(sorriso=0.9), "fala": dict(sorriso=0.35, boca_aberta=0.8,
-                                                                                    sobr_alt=0.5),
-          "preocupado": dict(sorriso=-0.4, sobr_inc=-0.35, sobr_alt=0.6),
-          "surpreso": dict(sorriso=0.0, boca_aberta=1.0, sobr_alt=1.4, abre_olho=1.25)}[expressao]
-    P0 = dict(P0, olhar_x=olhar[0], olhar_z=olhar[1])
-    mr, V = _rosto(f"{name}_rosto", P0)
+    P0 = dict(EXPRESSOES[expressao], olhar_x=olhar[0], olhar_z=olhar[1])
+    cor_rosto = {"pele": pele, "barba": cabelo if cabelo != COR["cabelo"] else COR["barba"], "sobr": cabelo,
+                 "barba_forca": barba}
+    mr, V = _rosto(f"{name}_rosto", P0, cor_rosto)
     Z["rosto"] = V
     cab = empty(name + "_cabeca")
     cab.parent = root
     cab.location = (0, 0, 1.5 + 0.135)
     cab.scale = (1.07, 1.07, 1.07)          # cabeça um pouco maior: lê no celular sem virar "boneca"
     _cabeca_malha(name + "_cabeca_m", mr).parent = cab
-    # nariz em cunha (geometria) + orelhas + cabelo curto
     nz = skin(name + "_nariz", [(0, -0.1, 0.012), (0, -0.112, -0.012), (0, -0.122, -0.03)], [(0, 1), (1, 2)],
-              [(0.008, 0.006), (0.011, 0.009), (0.016, 0.012)], M["ad_pele"])
+              [(0.008, 0.006), (0.011, 0.009), (0.016, 0.012)], m_pele)
     nz.parent = cab
     for s in (1, -1):
-        esfera(f"{name}_orelha{s}", 0.026, (s * 0.094, 0.01, 0.0), M["ad_pele"], scale=(0.4, 0.75, 1.15), seg=24,
+        esfera(f"{name}_orelha{s}", 0.026, (s * 0.094, 0.01, 0.0), m_pele, scale=(0.4, 0.75, 1.15), seg=24,
                parent=cab)
-    _cabelo_malha(name + "_cabelo", M["ad_cabelo"]).parent = cab
+    _cabelo_malha(name + "_cabelo", MP["cabelo"], corte).parent = cab
     _no_osso(cab, arm, "cabeca")
     Z["cabeca"] = cab
-    # ---- mãos por pose
+    # ---- mãos
     rot, me, md = POSES[pose]
+    Z["maos"] = {"e": {}, "d": {}}
     for l, s, tipo in (("e", 1, me), ("d", -1, md)):
         pulso = (s * 0.265, -0.005, 0.87)
-        for o in _mao(f"{name}_mao_{l}", M, tipo, s, pulso):
-            o.parent = root
-            _no_osso(o, arm, f"mao_{l}")
+        for tp in (TIPOS_MAO if maos == "todas" else (tipo,)):
+            obs = _mao(f"{name}_mao_{l}_{tp}", M, tp, s, pulso, pele=m_pele)
+            for o in obs:
+                o.parent = root
+                _no_osso(o, arm, f"mao_{l}")
+                o.hide_render = o.hide_viewport = tp != tipo
+            Z["maos"][l][tp] = obs
     base = {"tronco": (0, -3, 0), "cabeca": (0, 3, 6), "coxa_e": (-8, -4, -6), "canela_e": (14, 0, 0),
             "coxa_d": (0, 2, 0)}                     # contrapposto: peso na perna direita, joelho esquerdo solto
     for osso, rv in base.items():
@@ -498,6 +628,49 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0)):
         girar(arm, osso, x, y, z)
     bpy.context.view_layer.update()
     return Z
+
+
+def mao(Z, lado, tipo, quadro):
+    """Troca a mão (lado "e"/"d") para `tipo` a partir de `quadro` (corte seco, sem interpolação). Requer
+    ze_adulto(..., maos="todas")."""
+    for tp, obs in Z["maos"][lado].items():
+        for o in obs:
+            o.hide_render = o.hide_viewport = tp != tipo
+            o.keyframe_insert("hide_render", frame=quadro)
+            o.keyframe_insert("hide_viewport", frame=quadro)
+
+
+def pose(arm, quadro, ossos, interp="BEZIER"):
+    """Grava uma pose-chave: ossos = {osso: (x, y, z)} em graus (como girar()). Os ossos não citados não mudam.
+    Use a mesma lista de ossos nas poses vizinhas para o ease ficar limpo."""
+    for osso, rv in ossos.items():
+        girar(arm, osso, *rv)
+        arm.pose.bones[osso].keyframe_insert("rotation_quaternion", frame=quadro)
+
+
+def suavizar(obj, tipo="BEZIER", easing="AUTO"):
+    """Põe todas as curvas do objeto (e da ação do esqueleto) com interpolação `tipo` (ease de pose a pose)."""
+    ad = obj.animation_data
+    if not ad or not ad.action:
+        return
+    for fc in _curvas(ad.action):
+        for kp in fc.keyframe_points:
+            kp.interpolation = tipo
+            kp.easing = easing
+            if tipo == "BEZIER":
+                kp.handle_left_type = kp.handle_right_type = "AUTO_CLAMPED"
+
+
+def _curvas(action):
+    """F-curves de uma ação (Blender 4.4+ guarda em camadas/slots; antes, em action.fcurves)."""
+    if hasattr(action, "fcurves") and len(getattr(action, "fcurves", [])):
+        return list(action.fcurves)
+    out = []
+    for ly in getattr(action, "layers", []):
+        for st in ly.strips:
+            for cb in st.channelbags:
+                out.extend(cb.fcurves)
+    return out
 
 
 # ================================================================ oficina de verdade (limpa)
