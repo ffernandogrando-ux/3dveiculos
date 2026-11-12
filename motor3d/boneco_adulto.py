@@ -131,11 +131,12 @@ def _rosto(name, P):
     abert = val("boca_aberta", P.get("boca_aberta", 0.0))
 
     ex, ez, ea, eb = 0.036, 0.016, 0.019, 0.0098
-    olho = luz = iris = palp = 0.0
+    olho = luz = iris = palp = olheira = 0.0
     for lado in (-1, 1):
         cx = lado * ex
         ebs = op("MAXIMUM", op("MULTIPLY", abre, eb), 0.0006)
-        mo = dentro(el(X, cx, ez, ea, ebs), 0.15)
+        mo = dentro(el(X, cx, ez, ea * 0.92, ebs), 0.15)
+        mo = op("MULTIPLY", mo, op("LESS_THAN", Zs, op("ADD", ez, op("MULTIPLY", ebs, 0.62))))   # pálpebra cobre o topo
         # íris + pupila (presas ao branco do olho)
         ix = op("ADD", cx, op("MULTIPLY", ox, ea * 0.4))
         iz = op("ADD", ez, op("MULTIPLY", oz, eb * 0.3))
@@ -143,9 +144,11 @@ def _rosto(name, P):
         pu = op("MULTIPLY", dentro(el(X, ix, iz, 0.0036, 0.0036), 0.2), mo)
         li = op("MULTIPLY", dentro(el(X, op("ADD", ix, -0.0025), op("ADD", iz, 0.0025), 0.0015, 0.0015), 0.3), mo)
         # pálpebra superior: faixa escura logo acima do olho (linha dos cílios)
-        pl = op("MULTIPLY", dentro(el(X, cx, op("ADD", ez, 0.0008), ea * 1.08, op("ADD", ebs, 0.0022)), 0.15),
+        pl = op("MULTIPLY", dentro(el(X, cx, op("ADD", ez, 0.0008), ea * 1.0, op("ADD", ebs, 0.0022)), 0.15),
                 op("SUBTRACT", 1.0, mo))
-        pl = op("MULTIPLY", pl, op("GREATER_THAN", Zs, ez - 0.002))
+        pl = op("MULTIPLY", pl, op("GREATER_THAN", Zs, op("ADD", ez, op("MULTIPLY", ebs, 0.45))))
+        olh = op("MULTIPLY", op("MAXIMUM", op("SUBTRACT", 1.0, el(X, cx, ez - 0.012, ea * 0.9, 0.006)), 0.0), 0.2)
+        olheira = olh if lado == -1 else op("MAXIMUM", olheira, olh)
         olho = mo if olho == 0.0 else op("MAXIMUM", olho, mo)
         iris = op("ADD", ir, op("MULTIPLY", pu, 2.0)) if iris == 0.0 else op("ADD", iris, op("ADD", ir, op(
             "MULTIPLY", pu, 2.0)))
@@ -187,6 +190,7 @@ def _rosto(name, P):
         return n.outputs[2]
 
     c = COR["pele"]
+    c = mix(c, op("MULTIPLY", olheira, op("SUBTRACT", 1.0, olho)), "#B5735A")
     c = mix(c, barba, COR["barba"])
     c = mix(c, op("MULTIPLY", labio, 0.85), COR["labio"])
     c = mix(c, fenda, "#4A1E1E")
@@ -217,13 +221,17 @@ def _forma(x, y, z):
     sz = 0.118 if z > 0 else 0.132
     if z < 0:
         t = -z
-        sx *= 1.0 + 0.07 * math.sin(math.pi * min(t, 1.0) * 0.8) - 0.1 * t ** 4      # maxilar largo, queixo largo
+        sx *= 1.0 + 0.12 * math.sin(math.pi * min(t, 1.0) * 0.8) - 0.12 * t ** 4      # maxilar largo, queixo largo
         sy *= 1.0 - 0.1 * t ** 2
+        if t < 0.3 and abs(x) > 0.55:               # maçãs do rosto
+            sx *= 1.04
     if z > 0.3:
         sy *= 1.0 + 0.05 * (z - 0.3)
     p = Vector((x * sx, y * sy, z * sz))
-    if z < -0.5 and y < -0.1:                       # queixo um pouco à frente
-        p.y -= 0.012 * (-z - 0.5) * 2
+    if z < -0.5 and y < -0.1:                       # queixo à frente
+        p.y -= 0.02 * (-z - 0.5) * 2
+    if 0.25 < z < 0.4 and y < -0.7:                 # arco da sobrancelha
+        p.y -= 0.006 * math.sin(math.pi * (z - 0.25) / 0.15)
     return p
 
 
@@ -249,7 +257,10 @@ def _cabelo_malha(name, m):
             apagar.append(v)
             continue
         n = Vector((x, y, z)).normalized()
-        v.co = _forma(x, y, z) + n * 0.005
+        topo = min(max((z - 0.2) / 0.6, 0.0), 1.0)
+        topete = 1.0 if (y < -0.45 and z > 0.5) else 0.0
+        infla = 0.006 + 0.016 * topo + 0.014 * topete * topo
+        v.co = _forma(x, y, z) + n * infla
     bmesh.ops.delete(bm, geom=apagar, context="VERTS")
     o = _liso(mt.mesh_obj(name, bm, m))
     so = o.modifiers.new("esp", "SOLIDIFY")
@@ -266,6 +277,8 @@ def _ossos():
          ("pescoco", (0, 0, 1.42), (0, 0, 1.53), "tronco"),
          ("cabeca", (0, 0, 1.53), (0, 0, 1.79), "pescoco")]
     for l, s in (("e", 1), ("d", -1)):
+        O += [(f"coxa_{l}", (s * 0.105, 0, 0.92), (s * 0.11, -0.005, 0.5), "quadril"),
+              (f"canela_{l}", (s * 0.11, -0.005, 0.5), (s * 0.115, 0, 0.1), f"coxa_{l}")]
         O += [(f"ombro_{l}", (s * 0.2, 0.01, 1.4), (s * 0.245, 0.01, 1.12), "tronco"),
               (f"cotovelo_{l}", (s * 0.245, 0.01, 1.12), (s * 0.265, -0.005, 0.87), f"ombro_{l}"),
               (f"mao_{l}", (s * 0.265, -0.005, 0.87), (s * 0.27, -0.01, 0.76), f"cotovelo_{l}")]
@@ -307,7 +320,7 @@ def _mao(name, M, tipo, s, pulso):
     px, py, pz = pulso
     pele = M["ad_pele"]
     obs = [skin(f"{name}_palma", [(px, py, pz + 0.01), (px + s * 0.004, py - 0.006, pz - 0.075)], [(0, 1)],
-                [(0.034, 0.016), (0.042, 0.017)], pele)]
+                [(0.04, 0.022), (0.046, 0.021)], pele)]
     # dedos: (offset lateral na palma, comprimento)
     dedos = [(-0.024, 0.07), (-0.008, 0.08), (0.008, 0.076), (0.022, 0.062)]   # do indicador ao mindinho (de -s)
     for k, (dx, L) in enumerate(dedos):
@@ -315,16 +328,16 @@ def _mao(name, M, tipo, s, pulso):
         base = (x0, py - 0.008, pz - 0.075)
         estendido = (tipo == "aberta") or (tipo == "aponta" and k == 0) or (tipo == "relaxada")
         if estendido:
-            curva = 0.012 if tipo == "relaxada" else 0.0
+            curva = 0.022 if tipo == "relaxada" else 0.0
             pts = [base, (x0, py - 0.012 - curva, pz - 0.075 - L * 0.55),
                    (x0, py - 0.016 - curva * 2.2, pz - 0.075 - L)]
         else:                              # dobrado para dentro da palma (punho)
             pts = [base, (x0, py - 0.03, pz - 0.095), (x0, py - 0.022, pz - 0.075)]
         obs.append(skin(f"{name}_dedo{k}", pts, [(0, 1), (1, 2)],
-                        [(0.0095, 0.0095), (0.0088, 0.0088), (0.0078, 0.0078)], pele))
+                        [(0.0115, 0.0115), (0.0105, 0.0105), (0.0092, 0.0092)], pele))
     pol = [(px + s * 0.03, py - 0.01, pz - 0.015), (px + s * 0.043, py - 0.03, pz - 0.045),
            (px + s * 0.044, py - 0.042, pz - 0.07)]
-    obs.append(skin(f"{name}_polegar", pol, [(0, 1), (1, 2)], [(0.012, 0.012), (0.011, 0.011), (0.0095, 0.0095)],
+    obs.append(skin(f"{name}_polegar", pol, [(0, 1), (1, 2)], [(0.0145, 0.0145), (0.013, 0.013), (0.011, 0.011)],
                     pele))
     return obs
 
@@ -353,31 +366,49 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0)):
     arm = _armature(name + "_esqueleto", root)
     Z["arm"] = arm
     # ---- macacão: tronco + pernas + mangas até o cotovelo (manga arregaçada)
-    P = [(0, 0, 0.95), (0, 0, 1.06), (0, 0, 1.24), (0, 0, 1.38), (0, 0, 1.46),            # 0-4 quadril..pescoço
-         (0.1, 0, 0.88), (0.105, -0.005, 0.5), (0.105, 0, 0.12),                          # 5-7 perna esq.
-         (-0.1, 0, 0.88), (-0.105, -0.005, 0.5), (-0.105, 0, 0.12),                       # 8-10
-         (0.19, 0.01, 1.38), (0.225, 0.01, 1.25), (0.245, 0.01, 1.13),                     # 11-13 manga esq.
-         (-0.19, 0.01, 1.38), (-0.225, 0.01, 1.25), (-0.245, 0.01, 1.13)]                  # 14-16
-    A = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (0, 8), (8, 9), (9, 10),
-         (3, 11), (11, 12), (12, 13), (3, 14), (14, 15), (15, 16)]
-    Rr = [(0.17, 0.13), (0.165, 0.13), (0.195, 0.14), (0.2, 0.13), (0.065, 0.06),
-          (0.1, 0.098), (0.075, 0.075), (0.074, 0.076), (0.1, 0.098), (0.075, 0.075), (0.074, 0.076),
-          (0.065, 0.06), (0.058, 0.056), (0.056, 0.056), (0.065, 0.06), (0.058, 0.056), (0.056, 0.056)]
-    G = ["quadril", "quadril", "tronco", "tronco", "pescoco", "quadril", "quadril", "quadril", "quadril", "quadril",
-         "quadril", "tronco", "ombro_e", "cotovelo_e", "tronco", "ombro_d", "cotovelo_d"]
+    P = [(0, 0, 0.95), (0, -0.02, 1.06), (0, 0, 1.24), (0, 0, 1.38), (0, 0, 1.47),           # 0-4 quadril..pescoço
+         (0.105, 0, 0.9), (0.11, 0, 0.72), (0.11, -0.005, 0.5), (0.11, 0.005, 0.36), (0.115, 0, 0.16),   # 5-9
+         (-0.105, 0, 0.9), (-0.11, 0, 0.72), (-0.11, -0.005, 0.5), (-0.11, 0.005, 0.36), (-0.115, 0, 0.16),
+         (0.2, 0.0, 1.37), (0.228, 0.01, 1.25), (0.245, 0.01, 1.13),                       # 15-17 manga esq.
+         (-0.2, 0.0, 1.37), (-0.228, 0.01, 1.25), (-0.245, 0.01, 1.13)]                    # 18-20
+    A = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8), (8, 9), (0, 10), (10, 11), (11, 12),
+         (12, 13), (13, 14), (3, 15), (15, 16), (16, 17), (3, 18), (18, 19), (19, 20)]
+    Rr = [(0.175, 0.135), (0.18, 0.155), (0.205, 0.15), (0.2, 0.13), (0.07, 0.065),
+          (0.1, 0.098), (0.095, 0.093), (0.068, 0.068), (0.074, 0.074), (0.085, 0.085),
+          (0.1, 0.098), (0.095, 0.093), (0.068, 0.068), (0.074, 0.074), (0.085, 0.085),
+          (0.078, 0.07), (0.06, 0.058), (0.057, 0.057), (0.078, 0.07), (0.06, 0.058), (0.057, 0.057)]
+    G = ["quadril", "quadril", "tronco", "tronco", "pescoco",
+         "quadril", "coxa_e", "canela_e", "canela_e", "canela_e",
+         "quadril", "coxa_d", "canela_d", "canela_d", "canela_d",
+         "tronco", "ombro_e", "cotovelo_e", "tronco", "ombro_d", "cotovelo_d"]
     corpo = skin(name + "_macacao", P, A, Rr, M["ad_macacao"], parent=root)
     _deforma(corpo, arm, G)
+    tx = bpy.data.textures.new(name + "_dobras", "CLOUDS")
+    tx.noise_scale = 0.08
+    dp = corpo.modifiers.new("dobras", "DISPLACE")
+    dp.texture = tx
+    dp.strength = 0.006
+    dp.mid_level = 0.5
+    dp.texture_coords = "LOCAL"
     Z["corpo"] = corpo
+    # trapézios e cós (cintura) do macacão
+    for s_ in (1, -1):
+        tp = skin(f"{name}_trapezio{s_}", [(0, 0.02, 1.47), (s_ * 0.13, 0.012, 1.41)], [(0, 1)],
+                  [(0.055, 0.05), (0.06, 0.05)], M["ad_macacao"], parent=root)
+        _deforma(tp, arm, ["pescoco", "tronco"])
+    cos = skin(name + "_cos", [(0, -0.008, 0.955), (0, -0.008, 0.99)], [(0, 1)], [(0.186, 0.148), (0.186, 0.15)],
+               M["ad_macacao_esc"], parent=root)
+    _deforma(cos, arm, ["quadril", "quadril"])
     # antebraços (pele) saindo da manga arregaçada + dobra da manga
     for l, s in (("e", 1), ("d", -1)):
         ab = skin(f"{name}_antebraco_{l}", [(s * 0.243, 0.01, 1.16), (s * 0.255, 0.0, 1.0), (s * 0.265, -0.005, 0.86)],
-                  [(0, 1), (1, 2)], [(0.046, 0.044), (0.044, 0.04), (0.033, 0.028)], M["ad_pele"], parent=root)
+                  [(0, 1), (1, 2)], [(0.048, 0.046), (0.046, 0.042), (0.037, 0.031)], M["ad_pele"], parent=root)
         _deforma(ab, arm, [f"cotovelo_{l}", f"cotovelo_{l}", f"mao_{l}"])
         dobra = skin(f"{name}_dobra_{l}", [(s * 0.243, 0.01, 1.15), (s * 0.247, 0.01, 1.11)], [(0, 1)],
                      [(0.062, 0.06), (0.062, 0.06)], M["ad_macacao_esc"], parent=root)
         _deforma(dobra, arm, [f"cotovelo_{l}", f"cotovelo_{l}"])
     # pescoço
-    pc = skin(name + "_pescoco", [(0, 0.008, 1.42), (0, 0.008, 1.54)], [(0, 1)], [(0.066, 0.062), (0.062, 0.058)],
+    pc = skin(name + "_pescoco", [(0, 0.008, 1.43), (0, 0.008, 1.535)], [(0, 1)], [(0.074, 0.07), (0.07, 0.066)],
               M["ad_pele"], parent=root)
     _deforma(pc, arm, ["tronco", "pescoco"])
     # gola com camiseta, faixas refletivas laranja (canelas e braços), bolso, pano, botas
@@ -397,15 +428,31 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0)):
     tronco.append(tag)
     quadril = [skin(name + "_pano", [(-0.08, 0.1, 0.94), (-0.09, 0.122, 0.85), (-0.095, 0.12, 0.76)],
                     [(0, 1), (1, 2)], [(0.035, 0.008), (0.032, 0.008), (0.028, 0.008)], M["ad_pano"])]
-    for x in (0.105, -0.105):
-        quadril.append(skin(f"{name}_faixa_perna{x:+.2f}", [(x, 0, 0.3), (x, 0, 0.34)], [(0, 1)],
-                            [(0.071, 0.071), (0.071, 0.071)], M["ad_faixa"]))
-        quadril.append(skin(f"{name}_refl_perna{x:+.2f}", [(x, 0, 0.312), (x, 0, 0.328)], [(0, 1)],
-                            [(0.0722, 0.0722), (0.0722, 0.0722)], M["ad_refletivo"]))
-        quadril.append(skin(f"{name}_bota{x:+.2f}", [(x, 0.02, 0.13), (x, -0.005, 0.06), (x, -0.13, 0.05)],
-                            [(0, 1), (1, 2)], [(0.064, 0.064), (0.07, 0.052), (0.058, 0.04)], M["ad_bota"]))
-        quadril.append(skin(f"{name}_sola{x:+.2f}", [(x, 0.035, 0.014), (x, -0.15, 0.014)], [(0, 1)],
-                            [(0.066, 0.014), (0.06, 0.014)], M["ad_sola"]))
+    canelas = {"e": [], "d": []}
+    for l, x in (("e", 0.115), ("d", -0.115)):
+        c = canelas[l]
+        c.append(skin(f"{name}_faixa_perna_{l}", [(x, 0, 0.3), (x, 0, 0.34)], [(0, 1)],
+                      [(0.078, 0.078), (0.078, 0.078)], M["ad_faixa"]))
+        c.append(skin(f"{name}_refl_perna_{l}", [(x, 0, 0.312), (x, 0, 0.328)], [(0, 1)],
+                      [(0.0792, 0.0792), (0.0792, 0.0792)], M["ad_refletivo"]))
+        c.append(skin(f"{name}_barra_{l}", [(x, 0, 0.13), (x, 0, 0.165)], [(0, 1)], [(0.088, 0.088), (0.087, 0.087)],
+                      M["ad_macacao_esc"]))
+        c.append(skin(f"{name}_bota_{l}", [(x, 0.02, 0.14), (x, -0.005, 0.06), (x, -0.13, 0.05)],
+                      [(0, 1), (1, 2)], [(0.07, 0.07), (0.074, 0.054), (0.06, 0.042)], M["ad_bota"]))
+        c.append(skin(f"{name}_sola_{l}", [(x, 0.035, 0.014), (x, -0.15, 0.014)], [(0, 1)],
+                      [(0.07, 0.014), (0.064, 0.014)], M["ad_sola"]))
+        # bolso de chapa na lateral da coxa
+        bc = mt.box(f"{name}_bolso_coxa_{l}", -0.006, 0.006, -0.05, 0.05, -0.06, 0.06, M["ad_macacao_esc"],
+                    anchor="center")
+        bc.location = (x + (0.098 if x > 0 else -0.098), 0, 0.7)
+        _bevel(bc, 0.005)
+        c_coxa = bc
+        c_coxa.parent = root
+        _no_osso(c_coxa, arm, f"coxa_{l}")
+    for l in ("e", "d"):
+        for o in canelas[l]:
+            o.parent = root
+            _no_osso(o, arm, f"canela_{l}")
     for o in tronco:
         o.parent = root
         _no_osso(o, arm, "tronco")
@@ -423,7 +470,7 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0)):
     cab = empty(name + "_cabeca")
     cab.parent = root
     cab.location = (0, 0, 1.5 + 0.135)
-    cab.scale = (1.12, 1.12, 1.12)          # cabeça um pouco maior: lê no celular sem virar "boneca"
+    cab.scale = (1.07, 1.07, 1.07)          # cabeça um pouco maior: lê no celular sem virar "boneca"
     _cabeca_malha(name + "_cabeca_m", mr).parent = cab
     # nariz em cunha (geometria) + orelhas + cabelo curto
     nz = skin(name + "_nariz", [(0, -0.1, 0.012), (0, -0.112, -0.012), (0, -0.122, -0.03)], [(0, 1), (1, 2)],
@@ -442,6 +489,11 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0)):
         for o in _mao(f"{name}_mao_{l}", M, tipo, s, pulso):
             o.parent = root
             _no_osso(o, arm, f"mao_{l}")
+    base = {"tronco": (0, -3, 0), "cabeca": (0, 3, 6), "coxa_e": (-8, -4, -6), "canela_e": (14, 0, 0),
+            "coxa_d": (0, 2, 0)}                     # contrapposto: peso na perna direita, joelho esquerdo solto
+    for osso, rv in base.items():
+        if osso not in rot:
+            girar(arm, osso, *rv)
     for osso, (x, y, z) in rot.items():
         girar(arm, osso, x, y, z)
     bpy.context.view_layer.update()
@@ -505,11 +557,15 @@ def oficina(M, largura=9.0, fundo_y=2.2):
     pn = mt.box("painel", -0.9, 0.9, -0.01, 0.01, 1.35, 2.25, pbr("painel", "#2B3038", 0.7))
     pn.location = (-1.6, fundo_y - 0.02, 1.35)
     pn.parent = root
-    for k in range(5):
-        f = mt.box(f"ferr{k}", -0.012, 0.012, -0.01, 0.01, -0.16, 0.16, pbr("ferr", "#B9C0C8", 0.25, metal=1.0))
-        f.location = (-2.2 + k * 0.3, fundo_y - 0.04, 1.8)
-        f.rotation_euler = (0, math.radians(8 * (k - 2)), 0)
-        f.parent = root
+    for k in range(5):        # chaves combinadas penduradas (cabo + duas cabeças), em degraus de tamanho
+        L = 0.14 + 0.03 * k
+        x = -2.15 + k * 0.28
+        cabo = skin(f"chave_cabo{k}", [(x, fundo_y - 0.035, 1.95), (x, fundo_y - 0.035, 1.95 - L)], [(0, 1)],
+                    [(0.012, 0.004), (0.012, 0.004)], pbr("ferr", "#B9C0C8", 0.25, metal=1.0))
+        cabo.parent = root
+        for z in (1.95, 1.95 - L):
+            esfera(f"chave_cab{k}{z:.2f}", 0.022, (x, fundo_y - 0.035, z), pbr("ferr", "#B9C0C8", 0.25, metal=1.0),
+                   scale=(1, 0.3, 1), seg=20, parent=root)
     # barras de luz no teto (emissivas, aparecem nos reflexos)
     for k in range(3):
         b = mt.box(f"luz_teto{k}", -1.0, 1.0, -0.04, 0.04, -0.02, 0.02, pbr("tubo", "#FFFFFF", 0.3, emit=6.0))

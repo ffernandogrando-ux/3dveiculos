@@ -134,7 +134,7 @@ def cena_pneu(escala, amostras):
     tc.estudio_tecnico(alvo=(0, 0, 0.32), luz=1.0)
     yaw = -24
     cal = tc.pneu_corte("calibrado", loc=(-0.31, 0.0, 0.0), yaw=yaw, pressao=1.0, cor_pegada=tc.VERDE)
-    mur = tc.pneu_corte("murcho", loc=(0.31, 0.0, 0.0), yaw=yaw, pressao=0.35, cor_pegada=tc.VERMELHO)
+    mur = tc.pneu_corte("murcho", loc=(0.31, 0.0, 0.0), yaw=yaw, pressao=0.35, cor_pegada=tc.VERMELHO, fantasma=tc.VERDE)
     alvo = (0.0, 0.0, 0.40)
     cam = tc.camera((0, -5.4, 1.6), alvo, lente=70)
     tc.orbita(cam, alvo, 5.4, 0.0, 1.6)

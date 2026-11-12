@@ -1,8 +1,9 @@
 """Prova da variante ADULTA dos veículos (veiculos3, estilo="real"): estúdio de foto de montadora.
 
 Uso:  ~/.venv-video/bin/python videos/_estilo3/veiculos_real_prova.py [carros] [motos] [--amostras 48] [--escala 1.0]
-Saídas nesta pasta: carros_real.png (hatch vermelho, SUV grafite, picape branca, sedã azul) e
-motos_real.png (street tipo CG vermelha, trail tipo Bros preta, cub tipo Biz branca).
+Saídas nesta pasta: carros_real.png (hatch vermelho, SUV grafite, picape branca, sedã azul),
+motos_real.png (street tipo CG vermelha, trail tipo Bros preta, cub tipo Biz branca) e carro_tecnico.png (hatch
+vermelho 1080x1920 no estúdio escuro de motor3d/tecnico.py, para combinar com as cenas técnicas).
 Estúdio: piso cinza-escuro levemente reflexivo, fundo em degradê cinza, softbox grande em cima, 2 recortes
 (rim) atrás e um preenchimento baixo na frente. AgX "Medium High Contrast".
 """
@@ -19,7 +20,7 @@ def args():
     alvo = [x for x in a if not x.startswith("--") and not x.replace(".", "").isdigit()]
     amostras = int(a[a.index("--amostras") + 1]) if "--amostras" in a else 48
     escala = float(a[a.index("--escala") + 1]) if "--escala" in a else 1.0
-    return alvo or ["carros", "motos"], amostras, escala
+    return alvo or ["carros", "motos", "tecnico"], amostras, escala
 
 
 def nova_cena(res, amostras):
@@ -222,8 +223,35 @@ def cena_motos(amostras, escala):
     render(os.path.join(HERE, "motos_real.png"))
 
 
+def cena_tecnico(amostras, escala):
+    """O hatch vermelho sozinho, 3/4 frente, no estúdio escuro das cenas técnicas (motor3d/tecnico.py), em escala
+    real (1:1, como o pneu e o motor em corte), 1080x1920, luz de produto: 2 strips laterais + topo + recorte."""
+    import tecnico as tc
+    tc.nova_cena(res=(int(1080 * escala), int(1920 * escala)), amostras=amostras)
+    tc.estudio_tecnico(fundo_y=5.0, raio_curva=2.2, largura=28.0, strips=False, top=False, rim=False)
+    D = v3.carro("hatch_tecnico", {}, "hatch", "#D7262E", estilo="real", escala=1.0)
+    D["raiz"].rotation_euler = (0, 0, math.radians(-58))
+    bpy.context.view_layer.update()
+    print("hatch técnico interpenetração (vértices):", checar_rodas(D))
+    alvo = (0.15, 0, 0.62)
+    tc.luz_area("strip_esq", (-3.4, -2.2, 1.5), alvo, 0.30, 4.8, 150, abertura=70)
+    tc.luz_area("strip_dir", (3.6, -1.0, 1.5), alvo, 0.30, 4.8, 110, abertura=70)
+    tc.luz_area("topo", (-0.6, 0.8, 4.8), alvo, 4.0, 0.35, 14, abertura=60)
+    rim = tc.luz_area("rim", (0.6, 4.0, 3.0), alvo, 4.0, 0.4, 320, abertura=45)
+    rim.visible_diffuse = True
+    col = bpy.data.collections.new("alvo_rim_tecnico")
+    for o in [D["raiz"]] + list(D["raiz"].children_recursive):
+        if o.type == "MESH":
+            col.objects.link(o)
+    rim.light_linking.receiver_collection = col
+    tc.camera((1.5, -12.5, 1.9), (0.1, 0, 0.50), lente=45)
+    tc.render(os.path.join(HERE, "carro_tecnico.png"))
+
+
 if __name__ == "__main__":
     alvo, amostras, escala = args()
+    if "tecnico" in alvo:
+        cena_tecnico(amostras, escala)
     if "carros" in alvo:
         cena_carros(amostras, escala)
     if "motos" in alvo:

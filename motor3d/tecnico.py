@@ -188,15 +188,45 @@ def mat_oleo(nome="oleo"):
     return m
 
 
-def mat_secao(cor=LARANJA, nome=None, brilho=0.55):
-    """Face de seção chapada: cor sólida, quase sem sombreamento (emissão + difuso)."""
+def mat_secao(cor=LARANJA, nome=None, brilho=0.55, hachura=None):
+    """Face de seção chapada: cor sólida, quase sem sombreamento (emissão + difuso).
+    hachura=(cor_linha, passo_m, largura_m): linhas a 45° no plano XZ do objeto (padrão de desenho técnico),
+    que deixam a seção menos "bloco laranja" sem perder a leitura de corte."""
     m, b = _principled(nome or "secao_" + cor)
     b.inputs["Base Color"].default_value = lin(cor)
     b.inputs["Roughness"].default_value = 0.55
     b.inputs["Specular IOR Level"].default_value = 0.3
     b.inputs["Emission Color"].default_value = lin(cor)
     b.inputs["Emission Strength"].default_value = brilho
+    if hachura:
+        cl, passo, larg = hachura
+        nt = m.node_tree
+        N, L = nt.nodes, nt.links
+        tc_ = N.new("ShaderNodeTexCoord")
+        sp = N.new("ShaderNodeSeparateXYZ")
+        L.new(tc_.outputs["Object"], sp.inputs[0])
+        ad = N.new("ShaderNodeMath"); ad.operation = "ADD"
+        L.new(sp.outputs["X"], ad.inputs[0]); L.new(sp.outputs["Z"], ad.inputs[1])
+        dv = N.new("ShaderNodeMath"); dv.operation = "DIVIDE"; dv.inputs[1].default_value = passo * 1.4142
+        pp = N.new("ShaderNodeMath"); pp.operation = "PINGPONG"; pp.inputs[1].default_value = 0.5
+        lt = N.new("ShaderNodeMath"); lt.operation = "LESS_THAN"; lt.inputs[1].default_value = larg / passo / 2
+        L.new(ad.outputs[0], dv.inputs[0]); L.new(dv.outputs[0], pp.inputs[0]); L.new(pp.outputs[0], lt.inputs[0])
+        mx = N.new("ShaderNodeMix"); mx.data_type = "RGBA"
+        _sock(mx, "A").default_value = lin(cor)
+        _sock(mx, "B").default_value = lin(cl)
+        L.new(lt.outputs[0], _sock(mx, "Factor", "VALUE"))
+        cor_out = [o for o in mx.outputs if o.type == "RGBA"][0]
+        L.new(cor_out, b.inputs["Base Color"])
+        L.new(cor_out, b.inputs["Emission Color"])
     return m
+
+
+# seção "técnica" padrão: laranja queimado com hachura laranja-alerta (menos dominante que o laranja chapado)
+SECAO_ESCURA = "#8C3A12"
+
+
+def mat_secao_tecnica(nome="sec_tecnica", passo=0.007, larg=0.0013):
+    return mat_secao(SECAO_ESCURA, nome, 0.35, hachura=(LARANJA, passo, larg))
 
 
 def mat_emissivo(cor, forca=4.0, nome=None, alpha=1.0):
@@ -660,21 +690,72 @@ def _perfil_pneu(R=0.316, rb=0.203, A=0.1075, n=280):
     return P, Nn
 
 
+def _params_pressao(pressao, R=0.316):
+    pres = max(0.25, min(1.3, pressao))
+    d = 0.0135 / pres ** 1.25                       # deflexão (m): 13,5 mm calibrado, ~50 mm a 35 %
+    bojo = 0.30 * d + 0.75 * max(0.0, d - 0.016)    # abaulamento do flanco (por lado)
+    lift = 0.0045 * max(0.0, (0.8 - pres) / 0.3)    # centro da banda levanta quando murcho
+    return d, bojo, lift, R - d                     # ... e altura do eixo
+
+
+def _fazer_deforma(d, bojo, lift, h0, rb, H):
+    def deforma(a, r, t):
+        """Deslocamento (da, dr) da superfície externa lisa no ângulo t (0 = no chão)."""
+        tnn = np.clip((r - rb) / H, 0, 1)
+        w = np.exp(-(t / 0.42) ** 2)
+        wb = np.exp(-(t / 0.62) ** 2)
+        r1 = r - d * w * tnn ** 1.6
+        # flanco dobra: bojo com o pico um pouco abaixo do meio (onde a lona "vinca")
+        perfil_bojo = np.sin(math.pi * tnn ** 0.75) ** 1.8
+        a1 = a + np.sign(a) * bojo * wb * perfil_bojo
+        ct = np.cos(t)
+        lim = np.where(ct > 1e-3, h0 / np.maximum(ct, 1e-3), 1e9)
+        r1 = np.minimum(r1, lim)
+        wc = np.exp(-(t / 0.30) ** 2) * np.clip(1 - (a / 0.085) ** 2, 0, 1) ** 1.5 * _smooth(tnn, 0.85, 0.97)
+        r1 = r1 - lift * wc
+        return a1 - a, r1 - r
+    return deforma
+
+
+def _tracejado(nome, pts, larg, traco, vao, mat, y=-0.0015):
+    """Fita tracejada no plano y (pts = [(x, z)...])."""
+    P = np.array(pts)
+    seg = np.r_[0, np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))]
+    vs, fs = [], []
+    s0 = 0.0
+    while s0 < seg[-1]:
+        s1 = min(s0 + traco, seg[-1])
+        ss = np.linspace(s0, s1, max(2, int((s1 - s0) / 0.0015) + 1))
+        xs = np.interp(ss, seg, P[:, 0]); zs = np.interp(ss, seg, P[:, 1])
+        Q = np.c_[xs, zs]
+        T = np.gradient(Q, axis=0) if len(Q) > 2 else np.repeat(np.diff(Q, axis=0), 2, axis=0)
+        T = T / np.maximum(np.linalg.norm(T, axis=1)[:, None], 1e-9)
+        Nq = np.c_[-T[:, 1], T[:, 0]] * larg / 2
+        base = len(vs)
+        for q, nn in zip(Q, Nq):
+            vs.append((q[0] + nn[0], y, q[1] + nn[1])); vs.append((q[0] - nn[0], y, q[1] - nn[1]))
+        for k in range(len(Q) - 1):
+            fs.append([base + 2 * k, base + 2 * k + 1, base + 2 * k + 3, base + 2 * k + 2])
+        s0 = s1 + vao
+    ob = malha(nome, vs, fs, [mat])
+    ob.visible_shadow = False
+    ob.visible_glossy = False
+    return ob
+
+
 def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
-               mat_secao_pneu=None, seg_ang=460, cor_pegada=None, camadas=True):
+               mat_secao_pneu=None, seg_ang=460, cor_pegada=None, camadas=True, fantasma=None):
     """Pneu 205/55 R16 cortado ao meio pelo plano vertical que contém o eixo (fica a metade de trás),
     com aro de liga de 5 raios inteiro, disco de freio e a pegada desenhada no chão.
 
     pressao: 1.0 = calibrado; 0.5 ~ murcho (metade da pressão). Controla a deflexão (achatamento da pegada),
     o abaulamento/dobra do flanco e o levantamento do centro da banda (pneu murcho apoia nos ombros).
     Eixo do pneu = X local; o pneu encosta no chão (z = 0 do 'loc').
+    fantasma: cor (ex.: VERDE) para desenhar, tracejado sobre a seção de baixo, o perfil do pneu CALIBRADO
+    (pressão 1.0) apoiado no mesmo chão: mostra quanto o flanco dobrou e o aro desceu.
     Retorna dict com objetos, âncoras (pontos 3D de mundo p/ callouts) e medidas da pegada."""
     H = R - rb
-    pres = max(0.25, min(1.3, pressao))
-    d = 0.0135 / pres ** 1.25                 # deflexão (m): 13,5 mm calibrado, ~32 mm a 50 %
-    bojo = 0.30 * d + 0.55 * max(0.0, d - 0.016)   # abaulamento do flanco (por lado)
-    lift = 0.0045 * max(0.0, (0.8 - pres) / 0.3)   # centro da banda levanta quando murcho
-    h0 = R - d                                 # altura do eixo
+    d, bojo, lift, h0 = _params_pressao(pressao, R)
 
     P, Nn = _perfil_pneu(R, rb)
     n = len(P)
@@ -700,22 +781,8 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
 
     th = np.linspace(0.0, math.pi, seg_ang)[:, None]                 # 0 = embaixo (chão), pi = em cima
 
-    def deforma(a, r, t):
-        """Deslocamento (da, dr) da superfície externa lisa no ângulo t."""
-        tnn = np.clip((r - rb) / H, 0, 1)
-        w = np.exp(-(t / 0.42) ** 2)
-        wb = np.exp(-(t / 0.62) ** 2)
-        r1 = r - d * w * tnn ** 1.6
-        perfil_bojo = np.sin(math.pi * tnn ** 0.85) ** 1.4
-        a1 = a + np.sign(a) * bojo * wb * perfil_bojo
-        # chão plano: r*cos(t) <= h0
-        ct = np.cos(t)
-        lim = np.where(ct > 1e-3, h0 / np.maximum(ct, 1e-3), 1e9)
-        r1 = np.minimum(r1, lim)
-        # pneu murcho: centro da banda descola do chão
-        wc = np.exp(-(t / 0.30) ** 2) * np.clip(1 - (a / 0.085) ** 2, 0, 1) ** 1.5 * _smooth(tnn, 0.85, 0.97)
-        r1 = r1 - lift * wc
-        return a1 - a, r1 - r
+    deforma = _fazer_deforma(d, bojo, lift, h0, rb, H)
+
 
     da, dr = deforma(a0[None, :], r0[None, :], th)                   # (K, n)
     # sulcos transversais nos ombros (blocos), 64 passos por volta; corte cai no meio de um bloco
@@ -752,7 +819,7 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
             caps.append([oi, oj, ij, ii])
     faces = np.vstack([quads, np.array(caps)])
     idx = np.r_[np.zeros(len(quads), dtype=np.int32), np.ones(len(caps), dtype=np.int32)]
-    msec = mat_secao_pneu or M("sec_pneu", lambda: mat_secao(LARANJA, "sec_pneu", 0.45))
+    msec = mat_secao_pneu or M("sec_pneu", lambda: mat_secao("#E0601E", "sec_pneu", 0.32))
     pneu = malha(nome + "_pneu", verts, faces, [M("borracha", mat_borracha), msec], idx, suave=38)
     _normais_fora(pneu)
     sm = np.ones(len(faces), dtype=bool)
@@ -846,6 +913,14 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
         if camadas_v:
             ob_c = malha(f"{nome}_camadas_{int(t)}", camadas_v, camadas_f, [mat_carc, mat_cinta, mat_nylon], camadas_m)
             objs.append(ob_c)
+
+    # ---------- perfil fantasma do pneu calibrado (tracejado), apoiado no mesmo chão
+    if fantasma:
+        dc, bc, lc, h0c = _params_pressao(1.0, R)
+        defc = _fazer_deforma(dc, bc, lc, h0c, rb, H)
+        dda, ddr = defc(a0, r0, np.zeros(n))
+        pts = [(a, -(r) + (h0c - h0)) for a, r in zip(a0 + dda, r0 + ddr)]
+        objs.append(_tracejado(nome + "_fantasma", pts, 0.0022, 0.009, 0.006, mat_emissivo(fantasma, 3.0)))
 
     # ---------- aro de liga 5 raios (inteiro), cubo e disco de freio
     objs += _aro_5raios(nome)
@@ -994,7 +1069,7 @@ def motor_corte(nome="motor", loc=(0, 0, 0), yaw=0.0, ang_vira=80.0, nivel_oleo=
     deck = rv + Lb + alt_comp + 0.0015
     z_carter = -0.150
 
-    sec = M("sec_motor", lambda: mat_secao(LARANJA, "sec_motor", 0.28))
+    sec = M("sec_motor", lambda: mat_secao_tecnica("sec_motor"))
     alu_bloco = M("alu_bloco", lambda: mat_metal("#8E97A1", 0.35, "alu_bloco"))
     alu_cab = M("alu_cab", lambda: mat_metal("#A3ABB4", 0.33, "alu_cab"))
     aco = M("aco", lambda: mat_metal(ACO, 0.28, "aco"))
@@ -1180,7 +1255,40 @@ def motor_corte(nome="motor", loc=(0, 0, 0), yaw=0.0, ang_vira=80.0, nivel_oleo=
         "base": W(0, 0, z_carter),
         "centro": W(0, 0, (z_carter + zc + 0.122) / 2),
     }
-    return {"pai": pai, "objs": objs, "ancoras": anc, "z_coroa": z_coroa, "z_oleo": (z_oleo0, z_oleo1)}
+    paraf = [o for o in objs if "_paraf" in o.name]
+    loc_anc = {"aneis": Vector((rcil * math.cos(ang_a), rcil * math.sin(ang_a), zs_aneis[1])),
+               "oleo": Vector((0.060, -0.0005, (z_oleo0 + z_oleo1) / 2))}
+    return {"pai": pai, "objs": objs, "ancoras": anc, "z_coroa": z_coroa, "z_oleo": (z_oleo0, z_oleo1),
+            "grupos": {"vira": vira, "biela": [biela] + paraf, "pistao": [pistao, pino_pist] + aneis},
+            "geo": {"rv": rv, "Lb": Lb, "phi0": phi, "pino_v": pino_v, "z_pino": z_pino},
+            "loc_anc": loc_anc}
+
+
+def motor_pose(mt, ang_vira):
+    """Gira o virabrequim para 'ang_vira' (graus a partir do PMS) e leva biela e pistão junto (cinemática real
+    biela-manivela). Devolve as âncoras de mundo atualizadas ("aneis" anda com o pistão)."""
+    g = mt["geo"]
+    rv, Lb, phi0 = g["rv"], g["Lb"], g["phi0"]
+    phi = math.radians(ang_vira)
+    B0 = Vector((g["pino_v"][0], g["pino_v"][1]))
+    S0 = Vector((0.0, g["z_pino"]))
+    B1 = Vector((rv * math.sin(phi), rv * math.cos(phi)))
+    S1 = Vector((0.0, rv * math.cos(phi) + math.sqrt(Lb ** 2 - (rv * math.sin(phi)) ** 2)))
+    Rv = Matrix.Rotation(phi - phi0, 4, "Y")
+    for o in mt["grupos"]["vira"]:
+        o.matrix_basis = Rv
+    a_old = math.atan2(S0.y - B0.y, S0.x - B0.x)
+    a_new = math.atan2(S1.y - B1.y, S1.x - B1.x)
+    Mb = (Matrix.Translation((B1.x, 0, B1.y)) @ Matrix.Rotation(-(a_new - a_old), 4, "Y")
+          @ Matrix.Translation((-B0.x, 0, -B0.y)))
+    for o in mt["grupos"]["biela"]:
+        o.matrix_basis = Mb
+    Mp = Matrix.Translation((0, 0, S1.y - S0.y))
+    for o in mt["grupos"]["pistao"]:
+        o.matrix_basis = Mp
+    bpy.context.view_layer.update()
+    mw = mt["pai"].matrix_world
+    return {"aneis": tuple(mw @ (Mp @ mt["loc_anc"]["aneis"])), "oleo": tuple(mw @ mt["loc_anc"]["oleo"])}
 
 
 def _ceramica():

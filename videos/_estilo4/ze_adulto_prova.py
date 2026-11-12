@@ -41,9 +41,9 @@ def luzes(alvo=(0, 0, 1.2), k=1.0):
         o.location = pos
         o.rotation_mode = "QUATERNION"
         o.rotation_quaternion = (Vector(alvo) - Vector(pos)).to_track_quat("-Z", "Y")
-    area((-2.4, -3.0, 3.2), 900, 2.5, "#FFF3E6")      # key 5000 K
+    area((-2.2, -2.2, 1.9), 420, 2.0, "#FFE8D0")      # key 4500 K a 45°, na altura do rosto
     area((3.0, -2.2, 1.8), 300, 3.0, "#DCE6FF")       # fill 1/3
-    area((1.2, 2.0, 2.8), 900, 1.0, "#FFB070")        # rim quente
+    area((1.8, 1.2, 2.2), 900, 1.0, "#CFE0FF")        # rim frio pela direita (separa o azul do cinza)
 
 
 def camera(pos, alvo, lens=45, dof=None):
@@ -91,7 +91,7 @@ def retrato():
     Z = ba.ze_adulto("ze", M, pose="explica", expressao="fala", olhar=(0.2, 0.0))
     Z["raiz"].rotation_euler = (0, 0, math.radians(-15))
     luzes(alvo=(0, 0, 1.3))
-    camera((-0.45, -2.3, 1.5), (0, 0, 1.3), lens=50, dof=(2.35, 2.8))
+    camera((-0.6, -3.3, 1.45), (0, 0, 1.22), lens=65, dof=(3.35, 2.8))
     render("ze_adulto_retrato.png", (1080, 1920))
 
 
