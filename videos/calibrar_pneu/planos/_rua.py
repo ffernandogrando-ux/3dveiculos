@@ -500,3 +500,98 @@ def palavra(P, *alternativas, k=0, reserva=None, fim=False):
         raise KeyError(f"palavra {alternativas} não achada em {P['nome']}")
     print(f"aviso: {alternativas} não achada em {P['nome']}; usando {reserva:.2f} da duração", flush=True)
     return reserva * P["dur"]
+
+
+# ================================================================ andar / moedas rolando
+def andar(Z, t0, t1, p0, p1, rumo=None, passo=0.62, parar=True, extra=None):
+    """Caminhada simples pose a pose: a raiz vai de p0 a p1 (ease de saída no fim) e as pernas/braços alternam a
+    cada meio passo (passo = comprimento de uma passada, m). rumo = graus em z da raiz (padrão: de frente para o
+    movimento). extra = ossos fixos durante a caminhada (ex.: cabeça)."""
+    p0, p1 = Vector(p0), Vector(p1)
+    d = p1 - p0
+    if rumo is None:
+        rumo = math.degrees(math.atan2(-d.x, d.y)) + 180.0     # frente do boneco é -y
+    o = Z["raiz"]
+    krot(o, t0, (0, 0, rumo))
+    krot(o, t1, (0, 0, rumo))
+    n = max(2, int(round(d.length / (passo / 2))))
+    for i in range(n + 1):
+        f = i / n
+        t = t0 + (t1 - t0) * f
+        kloc(o, t, p0 + d * (f if not parar else (f if f < 0.8 else 0.8 + (f - 0.8) * 0.9)))
+        lado = 1 if i % 2 == 0 else -1
+        ultimo = parar and i == n
+        a = 0 if ultimo else 22 * lado
+        ossos = {"coxa_e": (-a, -2, 0), "coxa_d": (a, 2, 0),
+                 "canela_e": (8 if a <= 0 else 18, 0, 0), "canela_d": (8 if a >= 0 else 18, 0, 0),
+                 "ombro_e": (a * 0.6, -6, 0), "ombro_d": (-a * 0.6, 6, 0),
+                 "cotovelo_e": (-18, 0, 0), "cotovelo_d": (-18, 0, 0), "quadril": (0, 0, 0 if ultimo else 4 * lado)}
+        if ultimo:
+            ossos.update({"canela_e": (4, 0, 0), "canela_d": (4, 0, 0)})
+        if extra:
+            ossos.update(extra)
+        pose(Z, t, ossos)
+        # sobe e desce um pouquinho no meio da passada
+        if i < n:
+            tm = t + (t1 - t0) / n / 2
+            pm = p0 + d * ((i + 0.5) / n)
+            kloc(Z["raiz"], tm, (pm.x, pm.y, pm.z + 0.018))
+            pose(Z, tm, {"canela_e": (35 if lado < 0 else 6, 0, 0), "canela_d": (35 if lado > 0 else 6, 0, 0),
+                         "coxa_e": (-14 if lado < 0 else 4, -2, 0), "coxa_d": (-14 if lado > 0 else 4, 2, 0)})
+
+
+def moeda_rolando(name, M, inicio, rumo_graus, dist, t0, dur, r=0.022, cai=True, lado_cai=1, seed=0):
+    """Moeda sai de `inicio` (no chão), rola `dist` m no rumo dado desacelerando (fim suave), bambeia e cai
+    deitada. Física simples por keyframes (amostrada a cada quadro). Devolve a raiz (vazio) da moeda."""
+    rnd = random.Random(seed)
+    piv = mt.empty(name + "_piv")
+    m = moeda(name, M, r)
+    m.parent = piv
+    a = math.radians(rumo_graus)
+    dvec = Vector((math.cos(a), math.sin(a), 0))
+    nq = max(2, int(dur * C.FPS))
+    malhas = list(m.children)
+    for o in malhas:
+        o.hide_render = True
+        o.keyframe_insert("hide_render", frame=max(1, C.F(t0) - 1))
+    for k in range(nq + 1):
+        u = k / nq
+        t = t0 + dur * u
+        s = dist * (1 - (1 - u) ** 2)                         # desacelera (atrito)
+        roll = s / r
+        # bambeia nos últimos 35 % e cai deitada
+        if cai and u > 0.65:
+            w = (u - 0.65) / 0.35
+            tilt = lado_cai * (8 + 82 * w ** 2.2)
+        else:
+            tilt = lado_cai * 3 * math.sin(u * 9 + seed)
+        z = r * math.cos(math.radians(tilt)) + 0.0013 * abs(math.sin(math.radians(tilt)))
+        p = Vector(inicio) + dvec * s
+        piv.location = (p.x, p.y, z)
+        piv.rotation_euler = (0, 0, 0)
+        piv.rotation_euler = (math.radians(tilt), 0, a)
+        piv.keyframe_insert("location", frame=C.F(t))
+        piv.keyframe_insert("rotation_euler", frame=C.F(t))
+        m.rotation_euler = (0, -roll, 0)
+        m.keyframe_insert("rotation_euler", frame=C.F(t))
+        if k == 0:
+            for o in malhas:
+                o.hide_render = False
+                o.keyframe_insert("hide_render", frame=C.F(t0))
+    return piv
+
+
+def cena_carro_rua(M, murcho=0.12):
+    """Rua + bolinha vermelho gasto estacionado (raiz em y=2,95) com o pneu dianteiro do lado da câmera meio
+    murcho. Devolve (c, xf, pneu_xyz) — pneu_xyz = centro do pneu murcho no mundo."""
+    rua(M)
+    c = carro(M, cor="vermelho")
+    c["raiz"].location = (0, 2.95, 0)
+    xf = c["spec"]["xf"]
+    rd = roda_dd(c)
+    for o in rd.children:
+        if o.name.endswith("_pneu"):
+            o.scale = (1 + murcho * 0.4, 1 + murcho * 0.8, 1 - murcho)
+    rd.location.z -= c["spec"]["R"] * murcho * 0.85
+    bpy.context.view_layer.update()
+    return c, xf, rd.matrix_world.translation.copy()

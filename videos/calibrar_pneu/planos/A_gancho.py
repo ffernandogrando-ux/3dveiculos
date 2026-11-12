@@ -24,13 +24,13 @@ xf = c["spec"]["xf"]
 rd = R.roda_dd(c)
 for o in rd.children:
     if o.name.endswith("_pneu"):
-        o.scale = (1.035, 1.07, 0.93)
-rd.location.z -= c["spec"]["R"] * 0.06
+        o.scale = (1.05, 1.1, 0.88)
+rd.location.z -= c["spec"]["R"] * 0.1
 pneu = rd.matrix_world.translation if False else (xf, 2.95 - 0.66, 0.28)
 
 # ---- o cara
 Z = ba.ze_adulto("cara", M, expressao="neutro", maos="todas", **R.CARA)
-Z["raiz"].location = (xf - 1.45, 1.4, 0)
+Z["raiz"].location = (xf - 1.1, 1.3, 0)
 Z["raiz"].rotation_euler = (0, 0, math.radians(80))
 arm, V = Z["arm"], Z["rosto"]
 ba.mao(Z, "e", "punho", 1)            # chave do carro na mão esquerda
@@ -65,13 +65,13 @@ R.piscar(V, max(0.3, t_pneu - 0.7))
 
 # ---- câmera: baixa, atrás do pneu murcho (primeiro plano à esquerda), o cara de frente olhando para ele.
 # Push-in de 4 % e o alvo desce do rosto para entre o rosto e o pneu.
-c0, a0 = (xf + 1.45, -0.55, 0.6), (xf - 0.65, 1.65, 1.0)
-cam, al = R.camera(c0, a0, lens=24, dof=5.6)
+c0, a0 = (xf + 1.55, -0.75, 0.75), (xf - 0.6, 1.7, 0.95)
+cam, al = R.camera(c0, a0, lens=27, dof=5.6)
 p0, p1 = R.Vector(c0), R.Vector(a0)
 R.kloc(cam, 0, p0)
 R.kloc(cam, D, p0 + (p1 - p0) * 0.04)
 R.kloc(al, 0, p1)
 R.kloc(al, t1, p1)
-R.kloc(al, D, (xf - 0.5, 1.75, 0.9))
+R.kloc(al, D, (xf - 0.5, 1.8, 0.86))
 
 C.renderizar(P, sys.argv)

@@ -47,7 +47,7 @@ def mat_varredura():
     # casca de raio-X
     lw = N.new("ShaderNodeLayerWeight"); lw.inputs["Blend"].default_value = 0.45
     pw = N.new("ShaderNodeMath"); pw.operation = "POWER"; pw.inputs[1].default_value = 2.0
-    mr = N.new("ShaderNodeMapRange"); mr.inputs["To Min"].default_value = 0.06; mr.inputs["To Max"].default_value = 0.6
+    mr = N.new("ShaderNodeMapRange"); mr.inputs["To Min"].default_value = 0.06; mr.inputs["To Max"].default_value = 0.45
     L.new(lw.outputs["Facing"], pw.inputs[0]); L.new(pw.outputs[0], mr.inputs["Value"])
     em = N.new("ShaderNodeEmission"); em.inputs["Color"].default_value = tc.lin(tc.RAIO_X); em.inputs["Strength"].default_value = 1.2
     tr = N.new("ShaderNodeBsdfTransparent")
