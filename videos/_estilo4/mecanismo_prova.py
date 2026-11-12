@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 FONTE = "/usr/share/fonts/opentype/inter/Inter-Bold.otf"
 FONTE_MED = "/usr/share/fonts/opentype/inter/Inter-Medium.otf"
 FONTE_BLACK = "/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf"
+SUB = 0.68
 CALLOUTS = os.environ.get("SEM_CALLOUTS") is None
 
 
@@ -56,11 +57,11 @@ class HUD:
     def etiqueta(self, ini, fim, titulo, sub=None, cor=tc.CIANO, tam=36):
         """Texto em cima do trecho horizontal do callout (ini = cotovelo, fim = ponta)."""
         (x0, y0), (x1, y1) = ini, fim
-        x = min(x0, x1) + 5 * self.k
+        x = (x1 + 2 * self.k) if x1 < x0 else (x0 + 34 * self.k)
         anc = "l"
         self.texto((x, y1 - 14 * self.k), titulo, tam, "#FFFFFF", anc + "s")
         if sub:
-            self.texto((x, y1 + 30 * self.k), sub, tam * 0.58, cor, anc + "s", espaco=0.10, arq=FONTE_MED)
+            self.texto((x, y1 + 34 * self.k), sub, tam * SUB, cor, anc + "s", espaco=0.10, arq=FONTE_MED)
 
     def caixa_tag(self, xy, txt, cor, tam=30, ancora="m"):
         f = self.fonte(tam, FONTE_BLACK)
@@ -92,7 +93,18 @@ class HUD:
         self.d.line([(84 * k, y + 18 * k), (84 * k + 60 * k, y + 18 * k)], fill=rgb(tc.CIANO) + (255,), width=max(1, int(3 * k)))
         self.texto((84 * k, y + 70 * k), rotulo, 30, "#DDE3EA", "ls", espaco=0.16, arq=FONTE)
 
+    def vinheta(self, forca=0.38):
+        import numpy as np
+        W, H = self.W, self.H
+        y, x = np.mgrid[0:H, 0:W]
+        r = np.sqrt(((x - W / 2) / (W * 0.62)) ** 2 + ((y - H * 0.55) / (H * 0.62)) ** 2)
+        a = (np.clip((r - 0.55) / 0.6, 0, 1) ** 1.6 * forca * 255).astype("uint8")
+        v = Image.new("RGBA", (W, H), (6, 8, 11, 0))
+        v.putalpha(Image.fromarray(a))
+        self.img = Image.alpha_composite(self.img, v)
+
     def salvar(self, caminho):
+        self.vinheta()
         Image.alpha_composite(self.img, self.camada).convert("RGB").save(caminho, optimize=True)
 
 
@@ -109,10 +121,10 @@ def larg_txt(txt, tam, arq=FONTE, espaco=0.06):
 def chamada(ancora, cam, cot, titulo, sub, cor, escala, tam=34):
     """Callout diagramado em px (base 1080): cotovelo 'cot'; o trecho horizontal tem a largura do texto e vai
     para o lado do sinal de cot[2] (-1 = esquerda, +1 = direita)."""
-    w = max(larg_txt(titulo, tam), larg_txt(sub or "", int(tam * 0.58), FONTE_MED, 0.10)) + 10
+    w = max(larg_txt(titulo, tam), larg_txt(sub or "", int(tam * SUB), FONTE_MED, 0.10)) + 44
     x, y, lado = cot
     c = tc.callout_tela(ancora, cam, (x * escala, y * escala), (x + lado * w) * escala, cor=cor,
-                        espessura=0.0022, bolinha=0.0075, nome="c_" + titulo[:6])
+                        nome="c_" + titulo[:6])
     c.update(titulo=titulo, sub=sub, cor=cor, tam=tam)
     return c
 
@@ -122,7 +134,7 @@ def cena_pneu(escala, amostras):
     tc.estudio_tecnico(alvo=(0, 0, 0.32), luz=1.0)
     yaw = -24
     cal = tc.pneu_corte("calibrado", loc=(-0.31, 0.0, 0.0), yaw=yaw, pressao=1.0, cor_pegada=tc.VERDE)
-    mur = tc.pneu_corte("murcho", loc=(0.31, 0.0, 0.0), yaw=yaw, pressao=0.40, cor_pegada=tc.VERMELHO)
+    mur = tc.pneu_corte("murcho", loc=(0.31, 0.0, 0.0), yaw=yaw, pressao=0.35, cor_pegada=tc.VERMELHO)
     alvo = (0.0, 0.0, 0.40)
     cam = tc.camera((0, -5.4, 1.6), alvo, lente=70)
     tc.orbita(cam, alvo, 5.4, 0.0, 1.6)
@@ -131,9 +143,9 @@ def cena_pneu(escala, amostras):
     if CALLOUTS:
         co.append(chamada(cal["ancoras"]["cintas"], cam, (300, 655, 1), "CINTAS DE AÇO", None, tc.CIANO, escala, 30))
         co.append(chamada(cal["ancoras"]["ar"], cam, (470, 745, 1), "AR", "SEGURA O PESO", tc.CIANO, escala, 30))
-        co.append(chamada(cal["ancoras"]["pegada"], cam, (300, 1500, -1), "PEGADA CERTA", "APOIO POR INTEIRO", tc.VERDE, escala))
-        co.append(chamada(mur["ancoras"]["flanco"], cam, (1000, 1385, -1), "FLANCO DOBRADO", "ESQUENTA", tc.LARANJA, escala))
-        co.append(chamada(mur["ancoras"]["pegada"], cam, (765, 1530, 1), "PEGADA LARGA", "GASTA OS OMBROS", tc.VERMELHO, escala))
+        co.append(chamada(cal["ancoras"]["pegada"], cam, (400, 1460, -1), "PEGADA CERTA", "APOIA POR INTEIRO", tc.VERDE, escala))
+        co.append(chamada(mur["ancoras"]["flanco"], cam, (1030, 1410, -1), "FLANCO DOBRADO", "ESQUENTA", tc.LARANJA, escala, 32))
+        co.append(chamada(mur["ancoras"]["pegada_canto"], cam, (470, 1610, -1), "PEGADA LARGA", "GASTA OS OMBROS", tc.VERMELHO, escala))
     return cal, mur, co
 
 
@@ -156,16 +168,15 @@ def pos_pneu(caminho, cal, mur, co):
 def cena_motor(escala, amostras):
     tc.nova_cena(res=(int(1080 * escala), int(1920 * escala)), amostras=amostras)
     tc.estudio_tecnico(alvo=(0, 0, 0.25), luz=0.55)
-    mt = tc.motor_corte("motor", loc=(0, 0, 0), yaw=-24, ang_vira=80)
-    alvo = (0.0, 0.0, 0.245)
-    cam = tc.camera((0, -2.2, 0.6), alvo, lente=85)
-    tc.orbita(cam, alvo, 2.25, 0.0, 0.62)
+    mt = tc.motor_corte("motor", loc=(0.055, 0, 0), yaw=-20, ang_vira=80)
+    alvo = (0.0, 0.0, 0.25)
+    cam = tc.camera((0, -2.8, 0.7), alvo, lente=85)
+    tc.orbita(cam, alvo, 2.8, 0.0, 0.72)
     bpy.context.view_layer.update()
-    co = {}
-    co["aneis"] = tc.callout(mt["ancoras"]["aneis"], cam, dx=-0.11, dy=0.10, compr=0.09, espessura=0.0009,
-                             bolinha=0.0035, nome="c_aneis")
-    co["oleo"] = tc.callout(mt["ancoras"]["oleo"], cam, dx=0.09, dy=-0.07, compr=0.08, cor=tc.CIANO,
-                            espessura=0.0009, bolinha=0.0035, nome="c_oleo")
+    co = []
+    if CALLOUTS:
+        co.append(chamada(mt["ancoras"]["aneis"], cam, (420, 720, -1), "ANÉIS", "VEDAM O CILINDRO", tc.CIANO, escala, 40))
+        co.append(chamada(mt["ancoras"]["oleo"], cam, (1010, 1640, -1), "ÓLEO", "LUBRIFICA E ESFRIA", tc.CIANO, escala, 40))
     return mt, co
 
 
@@ -173,10 +184,8 @@ def pos_motor(caminho, mt, co):
     h = HUD(caminho)
     h.cantos()
     h.cabecalho("MOTOR EM CORTE", "02 / LUBRIFICAÇÃO")
-    rot = {"aneis": ("ANÉIS", "VEDAM O CILINDRO"), "oleo": ("ÓLEO", "LUBRIFICA E ESFRIA")}
-    for k, c in co.items():
-        t, s = rot[k]
-        h.etiqueta(p2(c["cotovelo"]), p2(c["fim"]), t, s, tc.CIANO, tam=40)
+    for c in co:
+        h.etiqueta(p2(c["cotovelo"]), p2(c["fim"]), c["titulo"], c["sub"], c["cor"], tam=c["tam"])
     h.salvar(caminho)
 
 

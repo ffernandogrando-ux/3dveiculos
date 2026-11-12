@@ -171,16 +171,18 @@ def mat_borracha(nome="borracha"):
 
 
 def mat_oleo(nome="oleo"):
-    """Óleo âmbar translúcido: vidro âmbar + absorção em volume para escurecer onde é mais fundo."""
+    """Óleo âmbar translúcido: vidro âmbar + leve absorção em volume + um fio de emissão para ler no escuro."""
     m, b = _principled(nome)
     nt = m.node_tree
-    b.inputs["Base Color"].default_value = lin("#E8A93A")
-    b.inputs["Roughness"].default_value = 0.04
+    b.inputs["Base Color"].default_value = lin("#F0B04A")
+    b.inputs["Roughness"].default_value = 0.05
     b.inputs["IOR"].default_value = 1.47
     b.inputs["Transmission Weight"].default_value = 1.0
+    b.inputs["Emission Color"].default_value = lin(OLEO)
+    b.inputs["Emission Strength"].default_value = 0.35
     va = nt.nodes.new("ShaderNodeVolumeAbsorption")
     va.inputs["Color"].default_value = lin(OLEO)
-    va.inputs["Density"].default_value = 18.0
+    va.inputs["Density"].default_value = 3.0
     out = nt.nodes["Material Output"]
     nt.links.new(va.outputs[0], out.inputs["Volume"])
     return m
@@ -457,7 +459,7 @@ def cortar_meio(ob, mat_corte, plano_y=0.0, guardar="+"):
     me = ob.data
     if mat_corte.name not in [m.name for m in me.materials if m]:
         me.materials.append(mat_corte)
-    im = [m.name for m in me.materials].index(mat_corte.name)
+    im = [m.name if m else "" for m in me.materials].index(mat_corte.name)
     n = len(me.polygons)
     cen = np.zeros(n * 3); nor = np.zeros(n * 3)
     me.polygons.foreach_get("center", cen)
@@ -750,7 +752,7 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
             caps.append([oi, oj, ij, ii])
     faces = np.vstack([quads, np.array(caps)])
     idx = np.r_[np.zeros(len(quads), dtype=np.int32), np.ones(len(caps), dtype=np.int32)]
-    msec = mat_secao_pneu or M("sec_pneu", lambda: mat_secao(LARANJA, "sec_pneu"))
+    msec = mat_secao_pneu or M("sec_pneu", lambda: mat_secao(LARANJA, "sec_pneu", 0.45))
     pneu = malha(nome + "_pneu", verts, faces, [M("borracha", mat_borracha), msec], idx, suave=38)
     _normais_fora(pneu)
     sm = np.ones(len(faces), dtype=bool)
@@ -820,13 +822,18 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
             vs.append(no_plano(a, r, t, -0.0005))
         vs.append(no_plano(a0[-1] - 0.004, rb + 0.016, t, -0.0005))
         vs.append(no_plano(a0[0] + 0.004, rb + 0.016, t, -0.0005))
+        # fatias "horizontais" ligando a parede esquerda à direita (sem sobreposição de triângulos)
         bm = bmesh.new()
-        cx = sum(v[0] for v in vs) / len(vs); cz = sum(v[2] for v in vs) / len(vs)
-        bc = bm.verts.new((cx, vs[0][1], cz))
-        bv = [bm.verts.new(v) for v in vs]
-        for i in range(len(bv)):
+        bv = [bm.verts.new(v) for v in vs[:n]]
+        for i in range(n // 2 - 1):
+            j = n - 1 - i
             try:
-                bm.faces.new((bc, bv[i], bv[(i + 1) % len(bv)]))
+                bm.faces.new((bv[i], bv[i + 1], bv[j - 1], bv[j]))
+            except ValueError:
+                pass
+        if n % 2 == 1:
+            try:
+                bm.faces.new((bv[n // 2 - 1], bv[n // 2], bv[n // 2 + 1]))
             except ValueError:
                 pass
         me = bpy.data.meshes.new(f"{nome}_ar_{int(t)}")
@@ -875,6 +882,7 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
         "flanco": W(a_fl, -0.001, -r_fl),
         "flanco_esq": W(ponto_sec(i_fl, 0, 0.0)[0], -0.001, -ponto_sec(i_fl, 0, 0.0)[2]),
         "pegada": W(0.0, -peg.get("comprimento", 0.2) / 2 * 0.75, -h0),
+        "pegada_canto": W(peg.get("a0", -0.07) * 0.8, -peg.get("comprimento", 0.2) / 2 * 0.8, -h0),
         "banda_baixo": W(0.0, -0.001, -(h0 + 0.0)),
         "topo": W(0.0, 0.0, R + 0.05),
         "centro": W(0.0, 0.0, 0.0),
@@ -986,7 +994,7 @@ def motor_corte(nome="motor", loc=(0, 0, 0), yaw=0.0, ang_vira=80.0, nivel_oleo=
     deck = rv + Lb + alt_comp + 0.0015
     z_carter = -0.150
 
-    sec = M("sec_motor", lambda: mat_secao(LARANJA, "sec_motor", 0.5))
+    sec = M("sec_motor", lambda: mat_secao(LARANJA, "sec_motor", 0.28))
     alu_bloco = M("alu_bloco", lambda: mat_metal("#8E97A1", 0.35, "alu_bloco"))
     alu_cab = M("alu_cab", lambda: mat_metal("#A3ABB4", 0.33, "alu_cab"))
     aco = M("aco", lambda: mat_metal(ACO, 0.28, "aco"))
@@ -1059,7 +1067,7 @@ def motor_corte(nome="motor", loc=(0, 0, 0), yaw=0.0, ang_vira=80.0, nivel_oleo=
         valvulas += [cab_v, haste, mola]
     # vela no centro
     booleano(cab, cilindro("_vela_f", 0.0075, (0, 0, zc + 0.015), (0, 0, zc + 0.125), segs=32))
-    vela_cer = cilindro(nome + "_vela_cer", 0.0058, (0, 0, zc + 0.055), (0, 0, zc + 0.135), segs=32, mats=[cera])
+    vela_cer = cilindro(nome + "_vela_cer", 0.0058, (0, 0, zc + 0.055), (0, 0, zc + 0.104), segs=32, mats=[cera])
     vela_aco = cilindro(nome + "_vela_aco", 0.0068, (0, 0, zc + 0.022), (0, 0, zc + 0.056), segs=6, mats=[aco])
     cortar_meio(cab, sec)
     cortar_meio(tampa_v, sec)
@@ -1086,9 +1094,8 @@ def motor_corte(nome="motor", loc=(0, 0, 0), yaw=0.0, ang_vira=80.0, nivel_oleo=
 
     # ---------- virabrequim (inteiro): munhões, braços com contrapeso, moente
     vira = []
-    vira.append(cilindro(nome + "_munhao_f", 0.0245, (0, -0.135, 0), (0, -0.030, 0), segs=64, mats=[aco_pol]))
+    vira.append(cilindro(nome + "_munhao_f", 0.0245, (0, -0.052, 0), (0, -0.030, 0), segs=64, mats=[aco_pol]))
     vira.append(cilindro(nome + "_munhao_t", 0.0245, (0, 0.030, 0), (0, 0.110, 0), segs=64, mats=[aco_pol]))
-    vira.append(cilindro(nome + "_polia", 0.040, (0, -0.150, 0), (0, -0.128, 0), segs=96, mats=[aco_esc]))
     vira.append(cilindro(nome + "_moente", 0.0215, (pino_v[0], -0.013, pino_v[1]), (pino_v[0], 0.013, pino_v[1]), segs=64, mats=[aco_pol]))
     ang_pino = math.atan2(pino_v[1], pino_v[0])
     contorno = []
@@ -1242,8 +1249,9 @@ def callout(ancora, cam, dx=0.2, dy=0.15, compr=0.15, cor=CIANO, espessura=0.001
     hal = bpy.context.active_object
     hal.name = nome + "_halo"
     hal.rotation_euler = cam.matrix_world.to_euler()
-    hal.data.materials.append(m)
     aplicar_mods_curva_circulo(hal, espessura * 0.8)
+    hal.data.materials.clear()
+    hal.data.materials.append(m)
     objs = [lin_ob, bol, hal]
     for o in objs:
         o.visible_shadow = False
@@ -1262,18 +1270,70 @@ def callout(ancora, cam, dx=0.2, dy=0.15, compr=0.15, cor=CIANO, espessura=0.001
     return {"ancora": tuple(a), "cotovelo": tuple(cot), "fim": tuple(fim), "objs": objs}
 
 
-def callout_tela(ancora, cam, cotovelo, fim_x, **kw):
+def callout_tela(ancora, cam, cotovelo, fim_x, frente=0.75, cor=CIANO, esp_px=2.4, bolinha_px=7.0,
+                 nome="callout"):
     """Callout com o cotovelo e a ponta dados em PIXELS da imagem final (mais fácil de diagramar em 9:16).
-    A linha continua 3D (na profundidade da âncora); cotovelo = (x, y) em px, fim_x = x da ponta em px."""
+    cotovelo = (x, y) em px; fim_x = x da ponta em px. A bolinha fica na âncora (3D); o cotovelo e a ponta
+    ficam no mesmo raio de visão, mas a 'frente' x a profundidade da âncora: na tela é igual, e assim a linha
+    passa na frente do piso e das peças em vez de entrar nelas."""
     sc = bpy.context.scene
-    ax, ay = projetar(ancora)
-    prof = (cam.matrix_world.inverted() @ Vector(ancora)).z * -1
+    W, H = sc.render.resolution_x, sc.render.resolution_y
     cd = cam.data
-    mpp = prof * cd.sensor_height / cd.lens / sc.render.resolution_y
-    dx = (cotovelo[0] - ax) * mpp
-    dy = -(cotovelo[1] - ay) * mpp
-    compr = abs(fim_x - cotovelo[0]) * mpp
-    return callout(ancora, cam, dx=dx, dy=dy, compr=compr, sentido=1 if fim_x >= cotovelo[0] else -1, **kw)
+    mi = cam.matrix_world
+    a = Vector(ancora)
+    prof = -(mi.inverted() @ a).z
+    sh = cd.sensor_height
+    sw = sh * W / H
+
+    def ponto(px, py, d):
+        x = (px / W - 0.5) * sw / cd.lens * d
+        y = (0.5 - py / H) * sh / cd.lens * d
+        return mi @ Vector((x, y, -d))
+    d2 = prof * frente
+    cot = ponto(cotovelo[0], cotovelo[1], d2)
+    fim = ponto(fim_x, cotovelo[1], d2)
+    # espessura e bolinha medidas em px (base 1080 de largura), convertidas para metros na profundidade certa
+    k = W / 1080
+    mpp = sh / cd.lens / H
+    ax, ay = projetar(a)
+    a2 = ponto(ax, ay, prof * 0.97)                 # bolinha um tiquinho à frente da superfície
+    esp = esp_px * k * mpp * d2 / 2
+    bol = bolinha_px * k * mpp * prof * 0.97
+    return _linha_callout([a2, cot, fim], cam, cor, esp, bol, nome)
+
+
+def _linha_callout(pts, cam, cor, espessura, bolinha, nome):
+    m = mat_emissivo(cor, 5.0, nome + "_mat")
+    cu = bpy.data.curves.new(nome, "CURVE")
+    cu.dimensions = "3D"
+    cu.bevel_depth = espessura
+    cu.bevel_resolution = 2
+    sp = cu.splines.new("POLY")
+    sp.points.add(len(pts) - 1)
+    for i, p in enumerate(pts):
+        sp.points[i].co = (p.x, p.y, p.z, 1)
+    cu.materials.append(m)
+    lin_ob = bpy.data.objects.new(nome, cu)
+    bpy.context.scene.collection.objects.link(lin_ob)
+    a = pts[0]
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=bolinha, location=a, segments=24, ring_count=12)
+    bol = bpy.context.active_object
+    bol.name = nome + "_bolinha"
+    bol.data.materials.append(m)
+    bol.data.shade_smooth()
+    bpy.ops.mesh.primitive_circle_add(vertices=48, radius=bolinha * 2.1, location=a, fill_type="NOTHING")
+    hal = bpy.context.active_object
+    hal.name = nome + "_halo"
+    hal.rotation_euler = cam.matrix_world.to_euler()
+    aplicar_mods_curva_circulo(hal, espessura * 0.8)
+    hal.data.materials.clear()
+    hal.data.materials.append(m)
+    objs = [lin_ob, bol, hal]
+    for o in objs:
+        o.visible_shadow = False
+        o.visible_glossy = False
+        o.visible_diffuse = False
+    return {"ancora": tuple(a), "cotovelo": tuple(pts[1]), "fim": tuple(pts[-1]), "objs": objs}
 
 
 def aplicar_mods_curva_circulo(ob, esp):
