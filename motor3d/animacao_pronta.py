@@ -6,7 +6,10 @@ Em vez de keyframes à mão (boneco_adulto.pose), usa movimento real:
     ap.acoes(P)                                                           # nomes das ações
     ap.encadear(P, [("Walk_Loop", 0.0, 1.6), ("Idle_Loop", 1.6, 0.6)], fps=24)   # NLA com transição (blend)
     ap.colocar(P, (x, y, 0), rumo=158)                                    # lugar e direção na cena
-    ap.caminhar(P, "Walk_Loop", t0, t1, p0, p1)                           # anda de p0 a p1 sem o pé escorregar
+    vel = ap.caminhar(P, "Walk_Loop", t0, t1, p0, p1)                     # raiz de p0 a p1; vel = velocidade
+    ap.encadear(P, [("Walk_Loop", t0, t1 - t0, {"vel": vel}), ...])       #   da ação para o pé não escorregar
+    ap.carregar_acoes(".../UAL2_Standard.glb")                            # só as ações de outro arquivo
+    ap.vestir(P, camisa="#B5452F", calca="#3A5A86")                       # roupa pintada no corpo-base (UBC)
 
 Captura de movimento (CMU, formato ASF/AMC → BVH, conversão própria e sem dependências do Blender):
     ap.asf_amc_para_bvh("141.asf", "141_21.amc", "141_21.bvh", fps=24)
@@ -15,10 +18,13 @@ Captura de movimento (CMU, formato ASF/AMC → BVH, conversão própria e sem de
     ap.retarget(src, Z["arm"], ap.MAPA_CMU_ZE, ...)                       # no NOSSO Zé (boneco_adulto)
 
 O retarget é por DIREÇÃO de osso: calibra cada osso do alvo para a pose de repouso da fonte (T-pose da CMU), então
-funciona com repousos diferentes (o Zé fica de braços para baixo, o manequim UE em A-pose) e grava keyframes
-(quaternion) na ação do alvo. Tempos em segundos; quadros como no resto do motor (1 = t 0).
+funciona com repousos diferentes (o Zé fica de braços para baixo, o manequim UE em T-pose) e grava keyframes
+(quaternion) na ação do alvo; tira o giro do ator, casa a altura do quadril pelo comprimento da perna e prende o
+tornozelo mais baixo no chão. Tempos em segundos; quadros como no resto do motor (1 = t 0).
+Testes: videos/_animacao_pronta/teste_a.py (Quaternius) e teste_b.py (CMU no Zé). Fontes/licenças:
+assets/LICENCAS_personagens.md; para baixar de novo: bash scripts/baixar_personagens.sh.
 """
-import math, os, re
+import math, os
 
 # ======================================================================= ASF/AMC (CMU) → BVH, puro numpy
 _POL_M = 2.54 / 100 / 0.45            # unidade da CMU ("length 0.45" em polegadas) → metros
@@ -64,10 +70,6 @@ def ler_asf(caminho):
         l = txt[i].strip()
         if l.startswith(":"):
             sec = l.split()[0]
-            if sec == ":root":
-                pass
-        elif sec == ":root" and l.startswith("axis"):
-            pass
         elif sec == ":root" and l.startswith("order"):
             ossos["root"]["ordem_amc"] = [x.lower() for x in l.split()[1:]]
         elif sec == ":bonedata" and l == "begin":
@@ -242,7 +244,6 @@ def importar(caminho, nome="personagem", altura=None, pai=None):
 def carregar_acoes(caminho):
     """Só as ações de um arquivo (ex.: a biblioteca UAL): importa, apaga os objetos e devolve as ações.
     Servem em qualquer personagem com os mesmos nomes de osso (UAL ↔ UBC ↔ manequim UE)."""
-    bpy = _bpy()
     P = importar(caminho, "_tmp_acoes")
     ac = P["acoes"]
     apagar(P["raiz"])
@@ -329,7 +330,6 @@ def vestir(P, camisa="#B5452F", calca="#3A5A86", sapato="#2A2A2E", malha=None, m
     """Pinta roupa no corpo-base (Universal Base Characters, T-pose de 1,81 m): camisa de manga curta, calça e
     sapato por região do corpo em repouso (cor por vértice, mistura sobre a textura da pele). Rápido e sem malha
     nova; a roupa fica "colada" ao corpo (sem gola, bolso ou dobra). Alturas em m na escala ORIGINAL do arquivo."""
-    bpy = _bpy()
     o = malha or max(P["malhas"], key=lambda m: len(m.data.vertices))
     me = o.data
     at = me.color_attributes.get("roupa") or me.color_attributes.new("roupa", "FLOAT_COLOR", "POINT")
@@ -516,7 +516,7 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
     chao=True: depois de posar, sobe/desce o quadril para o tornozelo mais baixo ficar na altura do repouso (pé no
     chão, sem flutuar nem afundar; só nos quadros em que os dois pés estão perto do chão na fonte)."""
     bpy = _bpy()
-    from mathutils import Quaternion, Matrix, Vector
+    from mathutils import Matrix, Vector
     sc = bpy.context.scene
     mapa = [m for m in mapa if m[0] in alvo.pose.bones and m[1] in fonte.pose.bones]
     raiz_osso = raiz_osso or mapa[0][0]
@@ -562,7 +562,6 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
         dt = ((ref if ref is not None else mwa @ pb.tail) - mwa @ pb.head).normalized()
         al = dt.rotation_difference(ds)
         calib[t] = al @ _rot_mundo(alvo, t)
-    h_a0 = (mwa @ alvo.pose.bones[raiz_osso].head)
 
     def perna(arm, mw, coxa, canela, pe):
         a, b, c = (mw @ arm.pose.bones[x].head for x in (coxa, canela, pe))

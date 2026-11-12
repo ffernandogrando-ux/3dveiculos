@@ -30,3 +30,4 @@ assets/**
 !assets/**/*.py
 videos/_assets/_tmp/
 videos/*/_quadros*/
+videos/_animacao_pronta/_quadros_*/
