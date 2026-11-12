@@ -16,3 +16,8 @@ videos/_estilo4/_tmp/
 videos/*/_testes/
 videos/*/quadros_txt/
 videos/*/saida/
+assets/**
+!assets/**/
+!assets/**/*.md
+!assets/**/*.sh
+!assets/**/*.py
