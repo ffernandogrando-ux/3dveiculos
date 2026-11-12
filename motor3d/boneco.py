@@ -23,11 +23,11 @@ from mathutils import Vector, Matrix
 import motor as mt
 from motor import lin, empty
 
-COR = {"pele": "#F2B98F", "pele_quente": "#E39A74", "pele_borda": "#F7C9A3", "cabelo": "#4A2E22",
-       "macacao": "#2F67D8", "macacao_escuro": "#2552AE", "camiseta": "#FFF4E0", "bone": "#FF7A1A",
-       "aba": "#2F67D8", "bota": "#2B2F3A", "sola": "#1E2329", "cinto": "#3A4256", "pano": "#E5484D",
-       "chave": "#FFC928", "boca": "#7A2E2E", "lingua": "#E5484D", "bochecha": "#F08A7A", "olho": "#1B1B22",
-       "ziper": "#C9D0DA", "emblema": "#FFF4E0"}
+COR = {"pele": "#F5A878", "pele_quente": "#EE8A5E", "pele_borda": "#FFC69E", "cabelo": "#3E2116",
+       "macacao": "#1E5BFF", "macacao_escuro": "#1646C9", "camiseta": "#FFF6E0", "bone": "#FF6A00",
+       "aba": "#1E5BFF", "bota": "#262A36", "sola": "#16181F", "cinto": "#2E3448", "pano": "#FF2E4D",
+       "chave": "#FFC400", "boca": "#7A1E2A", "lingua": "#FF4D63", "bochecha": "#FF7A7A", "olho": "#14141C",
+       "ziper": "#E2E8F0", "emblema": "#FFF6E0"}
 
 LUZ_TOON = Vector((-0.35, -0.8, 0.5)).normalized()     # direção fixa da "luz" do 2D (de frente-esquerda-cima)
 
@@ -547,8 +547,8 @@ def _corta_baixo(o, z0):
 # ================================================================ cena: oficina clara
 def oficina_clara(M, estilo="vinil", largura=8.0, fundo_y=1.6):
     """Parede azul-acinzentada clara, rodapé com faixa amarela, chão epóxi liso, prateleira com pneus e galões."""
-    cor = {"parede": "#C9DAF0", "chao": "#C9D0DA", "faixa": "#FFC928", "prat": "#AEB8C6", "pneu": "#3A4256",
-           "galao_a": "#E5484D", "galao_b": "#2F67D8", "galao_c": "#FFC928"}
+    cor = {"parede": "#FFE07A", "chao": "#F3F5F9", "faixa": "#1E5BFF", "prat": "#FFFFFF", "pneu": "#2E3448",
+           "galao_a": "#FF2E4D", "galao_b": "#00B37A", "galao_c": "#FFC400"}
 
     def m_(n, rough=0.6):
         k = f"of_{n}_{estilo}"

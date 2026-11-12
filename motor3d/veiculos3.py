@@ -25,7 +25,7 @@ LATARIA = {"branco": "#F2F1EC", "prata": "#C4C9CF", "cinza": "#868D95", "preto":
            "vermelho": "#D93A3E", "azul": "#2F6FB3", "laranja": "#FF7A1A", "amarelo": "#FFC928"}
 
 BASE = {  # nome: (cor, rugosidade, coat, emissão, metálico)
-    "vidro": ("#2A4157", 0.22, 0.35, 0.0, 0.0),
+    "vidro": ("#2A4157", 0.08, 0.3, 0.0, 0.0),
     "plastico": ("#33373E", 0.55, 0.1, 0.0, 0.0),
     "grade": ("#2A2E34", 0.6, 0.0, 0.0, 0.0),
     "pneu": ("#2B2E33", 0.7, 0.05, 0.0, 0.0),
@@ -642,8 +642,8 @@ def carro(name, M, tipo="hatch", cor="prata", rosto=False, humor="feliz", olhar=
         ornam.append(p)
     # lanternas traseiras
     for sy in (1, -1):
-        lt = elipsoide(f"{name}_lanterna{sy}", (0, 0, 0), (0.03, 0.085, 0.045), M["lanterna"])
-        colar(lt, sup, (-5, sy * W * 0.72, belt - 0.06), (1, 0, 0), embute=0.008)
+        lt = elipsoide(f"{name}_lanterna{sy}", (0, 0, 0), (0.03, 0.10, 0.05), M["lanterna"])
+        colar(lt, sup, (-5, sy * W * 0.68, belt - 0.07), (1, 0, 0), embute=0.004)
         ornam.append(lt)
     # placas
     if placa_on:
@@ -750,210 +750,186 @@ def _moto_corpo(name, est, mats, mat_seg, bojo=(0.03, 0.03)):
     return loft(name, xs, aneis, mats, mat_seg, bojo=bojo)
 
 
+MOTOS = {
+    # R, largura do pneu, eixos, carroceria [(x, meia-largura, fundo, topo)] de trás p/ frente, banco (x0, x1),
+    # cabeça do garfo, altura do motor
+    "street": dict(R=0.28, larg=0.17, xr=-0.48, xf=0.50, zc=0.33,
+                   est=[(-0.70, 0.07, 0.70, 0.79), (-0.62, 0.09, 0.66, 0.81), (-0.46, 0.11, 0.60, 0.82),
+                        (-0.22, 0.12, 0.57, 0.82), (-0.04, 0.13, 0.59, 0.84), (0.06, 0.155, 0.62, 0.91),
+                        (0.20, 0.165, 0.65, 0.95), (0.31, 0.135, 0.71, 0.93), (0.37, 0.09, 0.77, 0.90)],
+                   banco=(-0.54, -0.02), cabeca=(0.40, 0.99)),
+    "trail": dict(R=0.31, larg=0.17, xr=-0.52, xf=0.56, zc=0.42,
+                  est=[(-0.78, 0.065, 0.83, 0.90), (-0.70, 0.085, 0.79, 0.93), (-0.50, 0.10, 0.72, 0.94),
+                       (-0.24, 0.11, 0.68, 0.95), (-0.04, 0.12, 0.69, 0.96), (0.06, 0.15, 0.71, 1.02),
+                       (0.20, 0.16, 0.74, 1.06), (0.32, 0.13, 0.81, 1.04), (0.38, 0.09, 0.87, 1.00)],
+                  banco=(-0.64, 0.02), cabeca=(0.42, 1.10)),
+    "cub": dict(R=0.24, larg=0.155, xr=-0.46, xf=0.54, zc=0.24,
+                est=[(-0.70, 0.08, 0.58, 0.67), (-0.62, 0.12, 0.55, 0.73), (-0.44, 0.15, 0.54, 0.75),
+                     (-0.28, 0.15, 0.48, 0.74), (-0.15, 0.12, 0.33, 0.60), (-0.04, 0.10, 0.28, 0.42),
+                     (0.08, 0.10, 0.28, 0.42), (0.16, 0.17, 0.29, 0.62), (0.21, 0.20, 0.31, 0.86),
+                     (0.27, 0.20, 0.34, 0.93), (0.31, 0.15, 0.38, 0.95)],
+                banco=(-0.60, -0.16), cabeca=(0.37, 0.98)),
+}
+
+
 def moto(name, M, tipo="street", cor="vermelho", bau=False):
     """Moto de brinquedo de vinil. tipo: street (a "160 de todo dia") | cub (motoneta 110/125) | trail.
     bau=True põe o baú de entregador (laranja com faixa refletiva) na grelha.
     Devolve dict(raiz, rodas, lataria, rosto=None, corpo, partes)."""
     materiais(M)
     lat = lataria_mat(M, cor)
+    P = MOTOS[tipo]
+    R, larg, xr, xf, zc, est, banco = (P[k] for k in ("R", "larg", "xr", "xf", "zc", "est", "banco"))
+    cab = Vector((P["cabeca"][0], 0, P["cabeca"][1]))
     root = vazio(name)
-    partes = []
-    lataria = []
+    partes, lataria = [], []
 
-    if tipo == "street":
-        R, larg, xr, xf = 0.27, 0.15, -0.50, 0.52
-        est = [(-0.70, 0.075, 0.66, 0.76), (-0.62, 0.09, 0.62, 0.79), (-0.45, 0.11, 0.57, 0.80),
-               (-0.20, 0.12, 0.54, 0.81), (-0.06, 0.13, 0.55, 0.83), (0.04, 0.155, 0.58, 0.90),
-               (0.18, 0.17, 0.62, 0.95), (0.30, 0.14, 0.70, 0.93), (0.36, 0.10, 0.76, 0.90)]
-        banco = (-0.52, -0.02)
-        cabeca = Vector((0.38, 0, 0.98))   # topo do garfo
-        guidao_z = 1.10
-    elif tipo == "trail":
-        R, larg, xr, xf = 0.31, 0.15, -0.54, 0.56
-        est = [(-0.78, 0.07, 0.80, 0.88), (-0.68, 0.085, 0.76, 0.91), (-0.48, 0.10, 0.70, 0.93),
-               (-0.20, 0.11, 0.66, 0.94), (-0.04, 0.12, 0.66, 0.95), (0.06, 0.15, 0.68, 1.00),
-               (0.20, 0.16, 0.72, 1.04), (0.32, 0.13, 0.80, 1.02), (0.38, 0.09, 0.86, 0.99)]
-        banco = (-0.60, 0.02)
-        cabeca = Vector((0.40, 0, 1.08))
-        guidao_z = 1.22
-    elif tipo == "cub":
-        R, larg, xr, xf = 0.23, 0.13, -0.46, 0.46
-        est = [(-0.66, 0.08, 0.50, 0.62), (-0.58, 0.12, 0.40, 0.68), (-0.40, 0.15, 0.34, 0.70),
-               (-0.18, 0.14, 0.33, 0.69), (-0.08, 0.10, 0.28, 0.52), (0.02, 0.09, 0.26, 0.40),
-               (0.14, 0.10, 0.26, 0.40), (0.22, 0.16, 0.28, 0.66), (0.28, 0.17, 0.30, 0.90),
-               (0.33, 0.13, 0.34, 0.94)]
-        banco = (-0.54, -0.12)
-        cabeca = Vector((0.36, 0, 0.96))
-        guidao_z = 1.02
-    else:
-        raise ValueError(tipo)
+    def add(o, lata=False):
+        filho(o, root)
+        partes.append(o)
+        if lata:
+            lataria.append(o)
+        return o
 
+    # ---- carroceria (tanque + banco + rabeta, ou escudo + assoalho + traseira na cub): uma malha só
     xs = [e[0] for e in est]
-    LATA, BANCO = 0, 1
 
     def mat_seg(i, j):
         if i < 0 or i >= len(xs) - 1:
-            return LATA
+            return 0
         xm = (xs[i] + xs[i + 1]) / 2
-        if banco[0] <= xm <= banco[1] and j >= 3:
-            return BANCO
-        return LATA
+        return 1 if (banco[0] <= xm <= banco[1] and j >= 3) else 0
 
-    corpo = _moto_corpo(name + "_corpo", est, [lat, M["banco"]], mat_seg)
-    filho(corpo, root)
-    lataria.append(corpo)
+    corpo = add(_moto_corpo(name + "_corpo", est, [lat, M["banco"]], mat_seg), True)
 
-    # rodas
+    # ---- rodas
     rodas = []
     for lado, x in (("t", xr), ("d", xf)):
         rd = roda(f"{name}_roda_{lado}", M, R, larg)
         filho(rd, root, (x, 0, R))
         rodas.append(rd)
 
-    eixo_d = Vector((xf, 0, R))
-    # garfo (dois tubos) do eixo dianteiro até a cabeça
+    # ---- garfo, mesa e guidão (tudo amarrado na cabeça)
+    yg = larg / 2 + 0.03
     for sy in (1, -1):
-        partes.append(tubo(f"{name}_garfo{sy}", [eixo_d + Vector((0, sy * (larg / 2 + 0.03), 0)),
-                                               cabeca + Vector((0, sy * 0.06, 0))],
-                           0.024, M["cromo"], suave=False))
-    # guidão
-    gx = cabeca.x - 0.04
-    gl = 0.30 if tipo != "cub" else 0.27
-    gpts = [(gx - 0.10, -gl, guidao_z + 0.02), (gx - 0.03, -gl * 0.6, guidao_z), (gx, 0, guidao_z - 0.02),
-            (gx - 0.03, gl * 0.6, guidao_z), (gx - 0.10, gl, guidao_z + 0.02)]
-    partes.append(tubo(f"{name}_guidao", gpts, 0.018, M["plastico"]))
+        add(tubo(f"{name}_garfo{sy}", [(xf, sy * yg, R), (cab.x, sy * yg, cab.z + 0.01)], 0.024, M["cromo"],
+                 suave=False))
+        add(elipsoide(f"{name}_cubo_d{sy}", (xf, sy * (yg + 0.005), R), (0.035, 0.02, 0.035), M["plastico"]))
+    mesa = add(caixa(name + "_mesa", (cab.x - 0.01, 0, cab.z + 0.02), (0.09, 2 * yg + 0.07, 0.045),
+                     M["plastico"], raio=0.45))
+    gz = cab.z + 0.05
+    gl = 0.27 if tipo != "trail" else 0.31
+    gx = cab.x - 0.02
+    add(tubo(f"{name}_guidao", [(gx - 0.09, -gl, gz + 0.05), (gx - 0.03, -gl * 0.55, gz + 0.02), (gx, 0, gz),
+                                (gx - 0.03, gl * 0.55, gz + 0.02), (gx - 0.09, gl, gz + 0.05)], 0.017, M["plastico"]))
     for sy in (1, -1):
-        partes.append(tubo(f"{name}_manopla{sy}", [(gx - 0.075, sy * (gl - 0.07), guidao_z + 0.012),
-                                                   (gx - 0.105, sy * (gl + 0.01), guidao_z + 0.022)],
-                           0.026, M["banco"], suave=False))
-        # retrovisor
-        partes.append(tubo(f"{name}_haste{sy}", [(gx - 0.02, sy * gl * 0.55, guidao_z),
-                                                 (gx - 0.04, sy * gl * 0.62, guidao_z + 0.14)],
-                           0.008, M["plastico"], suave=False))
-        espelho = elipsoide(f"{name}_espelho{sy}", (gx - 0.045, sy * gl * 0.63, guidao_z + 0.17),
-                            (0.018, 0.045, 0.034), M["plastico"])
-        partes.append(espelho)
+        add(tubo(f"{name}_manopla{sy}", [(gx - 0.07, sy * (gl - 0.08), gz + 0.042),
+                                          (gx - 0.095, sy * (gl + 0.005), gz + 0.052)], 0.025, M["banco"],
+                 suave=False))
+        add(tubo(f"{name}_haste{sy}", [(gx - 0.035, sy * gl * 0.5, gz + 0.02), (gx - 0.05, sy * gl * 0.6, gz + 0.12)],
+                 0.008, M["plastico"], suave=False))
+        add(elipsoide(f"{name}_espelho{sy}", (gx - 0.052, sy * gl * 0.62, gz + 0.145), (0.016, 0.042, 0.03),
+                      M["plastico"]))
 
-    # farol
+    # ---- farol e para-lama dianteiro
     if tipo == "cub":
-        cowl = caixa(name + "_carenagem", (cabeca.x + 0.01, 0, guidao_z - 0.01), (0.20, 0.30, 0.12), lat, raio=0.45)
-        lataria.append(cowl)
-        partes.append(cowl)
-        fz = guidao_z - 0.02
-        far = elipsoide(name + "_farol", (cabeca.x + 0.11, 0, fz), (0.025, 0.09, 0.045), M["farol"])
-        partes.append(far)
-        # para-lama dianteiro
-        pl = _paralama(name + "_paralama_d", R, 0.13, (-20, 100), lat)
-        filho(pl, root, (xf, 0, R))
-        lataria.append(pl)
+        add(caixa(name + "_carenagem", (cab.x + 0.0, 0, gz + 0.01), (0.20, 0.30, 0.11), lat, raio=0.45), True)
+        add(elipsoide(name + "_farol", (cab.x + 0.095, 0, gz + 0.005), (0.022, 0.085, 0.04), M["farol"]))
+        add(_paralama(name + "_paralama_d", R, 0.14, (-15, 105), lat, (xf, 0, R)), True)
+        for sy in (1, -1):
+            add(elipsoide(f"{name}_pisca_d{sy}", (cab.x + 0.07, sy * 0.13, gz + 0.0), (0.022, 0.022, 0.016),
+                          M["pisca"]))
     else:
-        concha = elipsoide(name + "_farol_concha", (cabeca.x + 0.09, 0, cabeca.z - 0.02), (0.07, 0.085, 0.085), lat)
-        lataria.append(concha)
-        partes.append(concha)
-        far = elipsoide(name + "_farol", (cabeca.x + 0.145, 0, cabeca.z - 0.02), (0.025, 0.07, 0.07), M["farol"])
-        partes.append(far)
+        fz = cab.z - 0.04
+        add(elipsoide(name + "_farol_concha", (cab.x + 0.075, 0, fz), (0.07, 0.085, 0.085), lat), True)
+        add(elipsoide(name + "_farol", (cab.x + 0.13, 0, fz), (0.024, 0.068, 0.068), M["farol"]))
+        for sy in (1, -1):
+            add(elipsoide(f"{name}_pisca_d{sy}", (cab.x + 0.05, sy * 0.125, fz - 0.01), (0.022, 0.02, 0.016),
+                          M["pisca"]))
         if tipo == "street":
-            pl = _paralama(name + "_paralama_d", R, 0.12, (-10, 95), lat)
-            filho(pl, root, (xf, 0, R))
-        else:  # trail: para-lama alto, logo abaixo do farol
-            pl = caixa(name + "_paralama_d", (xf + 0.04, 0, 2 * R + 0.12), (0.46, 0.12, 0.035), lat, raio=0.45)
-            pl.rotation_euler = (0, math.radians(8), 0)
-        lataria.append(pl)
-    for sy in (1, -1):
-        partes.append(elipsoide(f"{name}_pisca_d{sy}", (cabeca.x + 0.06, sy * 0.13, cabeca.z - 0.04),
-                                (0.025, 0.02, 0.016), M["pisca"]))
-    for o in partes:
-        filho(o, root)
-    partes_extra = []
+            add(_paralama(name + "_paralama_d", R, 0.12, (15, 100), lat, (xf, 0, R)), True)
+        else:  # trail: para-lama alto, preso no pé da mesa, abaixo do farol
+            zf = 2 * R + 0.10
+            add(caixa(name + "_paralama_d", (xf + 0.03, 0, zf), (0.44, 0.13, 0.04), lat, raio=0.45), True)
 
-    # motor, escape, balança, amortecedores
+    # ---- motor, quadro, escape
     if tipo == "cub":
-        mot = caixa(name + "_motor", (-0.05, 0, 0.22), (0.30, 0.16, 0.16), M["motor"], raio=0.4)
-        esc = [(0.05, -0.08, 0.18), (-0.10, -0.13, 0.15), (-0.40, -0.14, 0.20), (-0.55, -0.14, 0.26)]
-        mufla = [(-0.30, -0.15, 0.19), (-0.55, -0.15, 0.25)]
-        amort_x = xr + 0.12
-        amort_top = Vector((amort_x - 0.02, 0, 0.55))
+        mot = add(caixa(name + "_motor", (-0.10, 0, zc), (0.30, 0.17, 0.17), M["motor"], raio=0.4))
+        esc = [(0.02, -0.07, zc - 0.03), (-0.08, -0.13, zc - 0.07), (-0.30, -0.14, zc - 0.04)]
+        mufla = [(-0.26, -0.15, zc - 0.03), (-0.56, -0.15, zc + 0.04)]
     else:
-        zc = 0.30 if tipo == "street" else 0.40
-        mot = caixa(name + "_motor", (0.06, 0, zc + 0.04), (0.34, 0.18, 0.26), M["motor"], raio=0.35)
-        cil = caixa(name + "_cilindro", (0.16, 0, zc + 0.20), (0.14, 0.13, 0.20), M["motor"], raio=0.35)
-        cil.rotation_euler = (0, math.radians(-25), 0)
-        partes_extra.append(cil)
+        mot = add(caixa(name + "_motor", (0.05, 0, zc + 0.02), (0.32, 0.18, 0.24), M["motor"], raio=0.35))
+        cil = add(caixa(name + "_cilindro", (0.15, 0, zc + 0.19), (0.13, 0.13, 0.20), M["motor"], raio=0.35))
+        cil.rotation_euler = (0, math.radians(-22), 0)
+        add(tubo(name + "_quadro", [cab + Vector((-0.04, 0, -0.07)), Vector((0.25, 0, zc + 0.30)),
+                                    Vector((0.17, 0, zc + 0.12))], 0.028, M["plastico"]))
         if tipo == "street":
-            esc = [(0.26, -0.05, zc + 0.08), (0.24, -0.12, zc - 0.10), (0.0, -0.15, zc - 0.13),
-                   (-0.25, -0.16, zc - 0.07)]
-            mufla = [(-0.18, -0.17, zc - 0.06), (-0.52, -0.17, zc + 0.03)]
+            esc = [(0.22, -0.05, zc + 0.10), (0.24, -0.12, zc - 0.06), (0.04, -0.15, zc - 0.13),
+                   (-0.20, -0.18, zc - 0.10)]
+            mufla = [(-0.16, -0.19, zc - 0.10), (-0.50, -0.19, zc - 0.02)]
         else:
-            esc = [(0.26, -0.05, zc + 0.10), (0.22, -0.13, zc - 0.05), (0.0, -0.16, zc - 0.02),
-                   (-0.30, -0.16, zc + 0.20)]
-            mufla = [(-0.24, -0.17, zc + 0.19), (-0.56, -0.17, zc + 0.36)]
-        amort_x = xr + 0.10
-        amort_top = Vector((amort_x - 0.06, 0, est[2][2] + 0.02))
-        # quadro: tubo da cabeça até o motor
-        partes_extra.append(tubo(name + "_quadro", [cabeca + Vector((-0.04, 0, -0.06)),
-                                                    Vector((0.20, 0, zc + 0.28)), Vector((0.08, 0, zc + 0.10))],
-                                 0.03, M["plastico"]))
-    partes_extra.append(mot)
-    partes_extra.append(tubo(name + "_escape", esc, 0.022, M["cromo"]))
-    partes_extra.append(tubo(name + "_silencioso", mufla, [0.045, 0.040], M["cromo"], suave=False))
+            esc = [(0.22, -0.05, zc + 0.10), (0.22, -0.12, zc - 0.05), (0.02, -0.15, zc - 0.04),
+                   (-0.24, -0.18, zc + 0.14)]
+            mufla = [(-0.20, -0.19, zc + 0.13), (-0.54, -0.19, zc + 0.30)]
+    add(tubo(name + "_escape", esc, 0.022, M["cromo"]))
+    add(tubo(name + "_silencioso", mufla, [0.046, 0.040], M["cromo"], suave=False))
+
+    # ---- balança e amortecedores
+    piv = Vector((mot.location.x - 0.13, 0, R + 0.06 if tipo != "cub" else zc + 0.02))
+    ztopo_amort = _interp([(e[0], e[2]) for e in est], xr + 0.02) + 0.03
     for sy in (1, -1):
         y = sy * (larg / 2 + 0.035)
-        partes_extra.append(tubo(f"{name}_balanca{sy}", [(xr, y, R), (mot.location.x - 0.10, y * 0.9, R + 0.04)],
-                                 0.02, M["plastico"], suave=False))
-        partes_extra.append(tubo(f"{name}_amortecedor{sy}", [(amort_x, y, R + 0.03),
-                                                             (amort_top.x, y, amort_top.z)],
-                                 0.022, M["cromo"], suave=False))
-        partes_extra.append(tubo(f"{name}_mola{sy}", [(amort_x - 0.012, y, R + 0.10),
-                                                      (amort_top.x + 0.03, y, amort_top.z - 0.08)],
-                                 0.03, M["pisca"], suave=False))
+        add(tubo(f"{name}_balanca{sy}", [(xr, y, R), (piv.x, y * 0.85, piv.z)], 0.02, M["plastico"], suave=False))
+        add(elipsoide(f"{name}_cubo_t{sy}", (xr, y + sy * 0.005, R), (0.035, 0.02, 0.035), M["plastico"]))
+        if tipo != "cub":
+            a0 = Vector((xr + 0.07, y, R + 0.03))
+            a1 = Vector((xr + 0.01, y, ztopo_amort))
+            add(tubo(f"{name}_amortecedor{sy}", [a0, a1], 0.016, M["cromo"], suave=False))
+            add(tubo(f"{name}_mola{sy}", [a0.lerp(a1, 0.3), a0.lerp(a1, 0.85)], 0.028, M["pisca"], suave=False))
 
-    # para-lama traseiro + lanterna + placa + grelha
-    xt = est[0][0]
-    zt_tail = est[0][2]
-    lan = elipsoide(name + "_lanterna", (xt - 0.025, 0, (est[0][2] + est[0][3]) / 2), (0.03, 0.055, 0.032),
-                    M["lanterna"])
-    partes_extra.append(lan)
-    pl_t = tubo(name + "_paralama_t", [(xt + 0.02, 0, zt_tail + 0.01), (xt - 0.06, 0, zt_tail - 0.10),
-                                       (xt - 0.08, 0, zt_tail - 0.18)], 0.045, M["plastico"])
-    partes_extra.append(pl_t)
-    pq = placa(name + "_placa", M, larg=0.16, alt=0.12, esp=0.015)
-    pq.location = (xt - 0.10, 0, zt_tail - 0.17)
-    pq.rotation_euler = (0, math.radians(-12), math.pi)
-    partes_extra.append(pq)
+    # ---- traseira: para-lama em arco com a placa, lanterna, piscas, grelha
+    if tipo != "cub":
+        add(_paralama(name + "_paralama_t", R, 0.12, (95, 160), M["plastico"], (xr, 0, R)))
+        ang = math.radians(150)
+        nrm = Vector((math.cos(ang), 0, math.sin(ang)))
+        pq = placa(name + "_placa", M, larg=0.15, alt=0.11, esp=0.014)
+        pq.location = Vector((xr, 0, R)) + nrm * (R + 0.06)
+        _orientar(pq, nrm)
+        add(pq)
+    else:
+        pq = placa(name + "_placa", M, larg=0.15, alt=0.11, esp=0.014)
+        nrm = Vector((-0.94, 0, -0.34))
+        pq.location = Vector((est[0][0] + 0.01, 0, est[0][2] - 0.02))
+        _orientar(pq, nrm)
+        add(pq)
+    xt, zt0, zt1 = est[0][0], est[0][2], est[0][3]
+    add(elipsoide(name + "_lanterna", (xt - 0.012, 0, (zt0 + zt1) / 2), (0.028, 0.05, 0.028), M["lanterna"]))
     for sy in (1, -1):
-        partes_extra.append(elipsoide(f"{name}_pisca_t{sy}", (xt + 0.02, sy * 0.12, zt_tail - 0.02),
-                                      (0.02, 0.025, 0.016), M["pisca"]))
-    # grelha (bagageiro) atrás do banco
-    gz = est[1][3] + 0.03
-    gx0, gx1 = est[0][0] + 0.02, banco[0] + 0.12
-    gw = 0.10
-    grel = [(gx1, gw, gz - 0.03), (gx1 - 0.02, gw, gz), (gx0 + 0.03, gw, gz), (gx0, gw * 0.6, gz),
-            (gx0, -gw * 0.6, gz), (gx0 + 0.03, -gw, gz), (gx1 - 0.02, -gw, gz), (gx1, -gw, gz - 0.03)]
-    partes_extra.append(tubo(name + "_grelha", grel, 0.014, M["plastico"]))
+        add(elipsoide(f"{name}_pisca_t{sy}", (xt + 0.04, sy * (est[0][1] + 0.025), zt0 + 0.02), (0.022, 0.02, 0.016),
+                      M["pisca"]))
+    # grelha apoiada no alto da rabeta, atrás do banco
+    gx0, gx1 = xt + 0.03, banco[0] + 0.05
+    gz_ = _interp([(e[0], e[3]) for e in est], (gx0 + gx1) / 2) + 0.012
+    gw = 0.085
+    add(tubo(name + "_grelha", [(gx1, gw, gz_ - 0.01), (gx0 + 0.04, gw, gz_), (gx0, gw * 0.55, gz_),
+                                (gx0, -gw * 0.55, gz_), (gx0 + 0.04, -gw, gz_), (gx1, -gw, gz_ - 0.01)],
+             0.013, M["plastico"]))
     if bau:
-        bz = gz + 0.02
-        bx = (gx0 + gx1) / 2 - 0.04
-        b = caixa(name + "_bau", (bx, 0, bz + 0.19), (0.40, 0.42, 0.36), M["bau"], raio=0.22)
-        partes_extra.append(b)
-        tampa = caixa(name + "_bau_tampa", (bx, 0, bz + 0.385), (0.415, 0.435, 0.05), M["plastico"], raio=0.4)
-        partes_extra.append(tampa)
-        faixa = caixa(name + "_bau_faixa", (bx - 0.20, 0, bz + 0.12), (0.012, 0.32, 0.05), M["refletivo"],
-                      raio=0.4)
-        partes_extra.append(faixa)
-    for o in partes_extra:
-        filho(o, root)
-    return {"raiz": root, "rodas": rodas, "lataria": lataria, "rosto": None, "corpo": corpo,
-            "partes": partes + partes_extra}
+        bx = (gx0 + gx1) / 2 - 0.03
+        b = add(caixa(name + "_bau", (bx, 0, gz_ + 0.20), (0.40, 0.42, 0.38), M["bau"], raio=0.24))
+        add(caixa(name + "_bau_faixa", (bx - 0.205, 0, gz_ + 0.14), (0.012, 0.30, 0.045), M["refletivo"],
+                  raio=0.45))
+    return {"raiz": root, "rodas": rodas, "lataria": lataria, "rosto": None, "corpo": corpo, "partes": partes}
 
 
-def _paralama(name, R, larg, angulos, m):
-    """Para-lama em arco (casca grossa e lisa) em volta de uma roda de raio R. angulos em graus a partir de +x
-    no sentido de +z (0 = frente, 90 = em cima)."""
+def _paralama(name, R, larg, angulos, m, loc=(0, 0, 0)):
+    """Para-lama em arco (fita grossa e lisa) em volta de uma roda de raio R, centro em loc. angulos em graus a
+    partir de +x no sentido de +z (0 = frente, 90 = em cima, 180 = atrás)."""
     a0, a1 = (math.radians(a) for a in angulos)
-    rr = R + 0.05
-    n = 10
+    rr = R + 0.045
+    n = 12
     pts = [(rr * math.cos(a0 + (a1 - a0) * k / n), 0, rr * math.sin(a0 + (a1 - a0) * k / n)) for k in range(n + 1)]
-    # perfil achatado: tubo largo e fino (escala em y)
-    o = tubo(name, pts, 0.03, m, suave=False)
-    o.scale = (1, larg / 0.06, 1)
+    o = tubo(name, pts, 0.02, m, suave=False)
+    o.scale = (1, larg / 0.04, 1)
+    o.location = loc
     return o

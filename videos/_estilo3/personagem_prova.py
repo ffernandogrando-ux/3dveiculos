@@ -62,7 +62,7 @@ def luzes(alvo=(0, 0, 0.6), escala=1.0):
         o.rotation_quaternion = (Vector(alvo) - o.location).to_track_quat("-Z", "Y")
     area((-2.2, -2.6, 2.6), 420, 2.5, "#FFF1E0")     # key (5200 K, quente)
     area((2.6, -2.0, 1.4), 300, 2.5, "#E6EEFF")      # fill frio (key ~40 % mais forte)
-    area((0.6, 1.2, 2.2), 840, 1.2, "#FFFFFF")       # rim forte atrás/acima (descola da parede clara)
+    area((0.6, 1.2, 2.2), 520, 1.2, "#FFFFFF")       # rim forte atrás/acima (descola da parede clara)
 
 
 def camera(pos, alvo, lens=50, dof=None):
