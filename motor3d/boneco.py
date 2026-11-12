@@ -489,7 +489,7 @@ def mecanico(name, M, estilo="vinil", pose="parado", expressao="sorriso", olhar=
                 seg=32, parent=cab)
     fr.rotation_euler = (math.radians(-20), 0, 0)
     # boné (copa baixa + aba encostada; sem bolinha no topo) + emblema creme de frente
-    copa = esfera(name + "_bone", R * 1.07, (0, R * 0.03, R * 0.16), mat("bone", rough=0.45, coat=0.15),
+    copa = esfera(name + "_bone", R * 1.07, (0, R * 0.03, R * 0.16), mat("bone", rough=0.55),
                   scale=(1.04, 1.02, 0.84), parent=cab)
     _corta_baixo(copa, 0.0)
     aba = esfera(name + "_aba", R * 0.8, (0, -R * 1.0, R * 0.27), mat("aba", rough=0.45), scale=(1.0, 0.85, 0.05),
@@ -547,7 +547,7 @@ def _corta_baixo(o, z0):
 # ================================================================ cena: oficina clara
 def oficina_clara(M, estilo="vinil", largura=8.0, fundo_y=1.6):
     """Parede azul-acinzentada clara, rodapé com faixa amarela, chão epóxi liso, prateleira com pneus e galões."""
-    cor = {"parede": "#FFE07A", "chao": "#F3F5F9", "faixa": "#1E5BFF", "prat": "#FFFFFF", "pneu": "#2E3448",
+    cor = {"parede": "#FFE07A", "chao": "#B8C6DC", "faixa": "#1E5BFF", "prat": "#FFFFFF", "pneu": "#2E3448",
            "galao_a": "#FF2E4D", "galao_b": "#00B37A", "galao_c": "#FFC400"}
 
     def m_(n, rough=0.6):
