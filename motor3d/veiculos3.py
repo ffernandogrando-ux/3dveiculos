@@ -1076,7 +1076,7 @@ def _pbr(name, hexcol, rough, metal=0.0, coat=0.0, spec=0.5, emit=0.0, emit_cor=
 
 
 REAL_BASE = {  # nome: (cor, rough, metal, coat, spec, emit)
-    "r_vidro": ("#151C24", 0.03, 0.0, 0.0, 1.0, 0.0),
+    "r_vidro": ("#10151B", 0.09, 0.0, 0.0, 0.25, 0.0),
     "r_plastico": ("#1A1C1F", 0.62, 0.0, 0.0, 0.4, 0.0),
     "r_preto_brilho": ("#0C0D0F", 0.12, 0.0, 1.0, 0.6, 0.0),
     "r_borracha": ("#151618", 0.82, 0.0, 0.0, 0.3, 0.0),
@@ -1247,21 +1247,27 @@ def _spec_real(tipo):
     seguinte)]; janelas = vidro lateral (x0, x1); portas = x das juntas; kick = quanto a cintura sobe até a traseira."""
     s = dict(R=0.32, larg=0.205, aro=0.216, W=0.875, zb=0.19, belt=1.00, roof=1.46, tumble=0.14,
              cover=False, clad=False, rails=False, santo=False, spoiler=False, pilar_preto=False, kick=0.0)
-    if tipo == "hatch":       # Polo / HB20 / Onix: 4,05 x 1,75 x 1,47 m, aro 17
-        s.update(wb=2.56, fr=0.80, tr=0.62, kick=0.07, spoiler=True)
+    if tipo == "hatch":       # Polo / HB20 / Onix: 4,07 x 1,75 x 1,47 m, entre-eixos 2,56 (perfil-alvo do diretor)
+        # perfil-alvo dado com x a partir do para-choque dianteiro: aqui x = 2,11 - x_alvo
+        s.update(wb=2.56, fr=0.83, tr=0.68, R=0.31, aro=0.216, zb=0.25, belt=0.92, roof=1.47, spoiler=True,
+                 x_spoiler=-1.61)
         P = lambda XF, XR: dict(
-            topo=[(XR, 0.98, "lata"), (XR + 0.11, 1.07, "vidro"), (XR + 0.60, 1.365, "teto"), (-0.25, 1.445, "teto"),
-                  (0.40, 1.46, "vidro"),
-                  (1.18, 1.03, "lata"), (XF - 0.20, 0.96, "lata"), (XF - 0.05, 0.90, "lata"), (XF, 0.84, None)],
-            janelas=[(XR + 0.98, -0.08), (0.02, 1.12)], portas=[0.92, -0.06, -0.98])
-    elif tipo == "suv":       # T-Cross / Creta: 4,15 x 1,76 x 1,60 m, vão livre alto
-        s.update(wb=2.65, fr=0.85, tr=0.64, W=0.885, R=0.345, larg=0.215, aro=0.216, zb=0.27, belt=1.09,
-                 roof=1.61, tumble=0.12, clad=True, rails=True, pilar_preto=True, kick=0.05, spoiler=True)
+            topo=[(XR, 0.95, "lata"), (-1.82, 1.02, "vidro"), (-1.61, 1.34, "lata"), (-1.34, 1.39, "teto"),
+                  (-0.24, 1.47, "teto"), (0.06, 1.44, "vidro"), (0.81, 0.93, "lata"), (2.03, 0.74, "lata"),
+                  (XF, 0.70, None)],
+            cintura=[(XR, 1.02), (-1.45, 1.02), (0.81, 0.92), (XF, 0.92)],
+            larguras=[(XR, 0.835), (-1.20, 0.875), (0.90, 0.875), (XF, 0.81)],
+            janelas=[(-1.30, -0.08), (0.02, 0.78)], portas=[0.70, -0.06, -0.98])
+    elif tipo == "suv":       # T-Cross / Creta: derivado do hatch, +0,14 de altura, 4,20 m, rodas maiores
+        s.update(wb=2.65, fr=0.85, tr=0.70, W=0.885, R=0.345, larg=0.215, aro=0.216, zb=0.33, belt=1.06,
+                 roof=1.61, clad=True, rails=True, pilar_preto=True, spoiler=True, x_spoiler=-1.66)
         P = lambda XF, XR: dict(
-            topo=[(XR, 1.07, "lata"), (XR + 0.10, 1.16, "vidro"), (XR + 0.42, 1.53, "teto"), (-0.30, 1.595, "teto"),
-                  (0.44, 1.61, "vidro"),
-                  (1.22, 1.13, "lata"), (XF - 0.22, 1.06, "lata"), (XF - 0.05, 0.99, "lata"), (XF, 0.93, None)],
-            janelas=[(XR + 0.62, -0.08), (0.02, 1.15)], portas=[0.96, -0.06, -1.02])
+            topo=[(XR, 1.10, "lata"), (XR + 0.10, 1.17, "vidro"), (-1.66, 1.50, "lata"), (-1.42, 1.54, "teto"),
+                  (-0.24, 1.61, "teto"), (0.10, 1.58, "vidro"), (0.86, 1.08, "lata"), (XF - 0.08, 0.90, "lata"),
+                  (XF, 0.86, None)],
+            cintura=[(XR, 1.16), (-1.50, 1.16), (0.86, 1.06), (XF, 1.06)],
+            larguras=[(XR, 0.85), (-1.25, 0.885), (0.95, 0.885), (XF, 0.83)],
+            janelas=[(-1.36, -0.08), (0.02, 0.82)], portas=[0.74, -0.06, -1.02])
     elif tipo == "picape":    # Strada cabine simples (2 portas) com capota marítima: 4,45 m, frente alta
         s.update(wb=2.74, fr=0.84, tr=0.82, W=0.865, R=0.33, larg=0.205, zb=0.24, belt=1.03, roof=1.55,
                  cover=True, santo=True, xc=-0.36)
@@ -1270,13 +1276,15 @@ def _spec_real(tipo):
                   (s["xc"] + 0.03, 1.52, "teto"), (0.38, 1.55, "vidro"), (1.15, 1.08, "lata"),
                   (XF - 0.22, 1.01, "lata"), (XF - 0.05, 0.94, "lata"), (XF, 0.88, None)],
             janelas=[(s["xc"] + 0.12, 1.10)], portas=[0.94, s["xc"] + 0.05])
-    elif tipo == "seda":      # Virtus / Onix Plus: 4,48 m, terceiro volume curto
-        s.update(wb=2.65, fr=0.82, tr=0.98, belt=0.99, roof=1.46, kick=0.05)
+    elif tipo == "seda":      # Virtus / Onix Plus: 4,48 m, mesma frente e cabine do hatch, terceiro volume curto
+        s.update(wb=2.65, fr=0.83, tr=1.00, R=0.31, aro=0.216, zb=0.24, belt=0.92, roof=1.46)
         P = lambda XF, XR: dict(
-            topo=[(XR, 0.99, "lata"), (XR + 0.10, 1.05, "lata"), (XR + 0.40, 1.07, "vidro"), (XR + 1.02, 1.41, "teto"),
-                  (0.40, 1.46, "vidro"), (1.17, 1.02, "lata"), (XF - 0.20, 0.95, "lata"), (XF - 0.05, 0.89, "lata"),
-                  (XF, 0.83, None)],
-            janelas=[(XR + 1.10, -0.08), (0.02, 1.11)], portas=[0.92, -0.06, -0.98])
+            topo=[(XR, 0.99, "lata"), (XR + 0.10, 1.05, "lata"), (XR + 0.40, 1.07, "vidro"), (-1.25, 1.40, "teto"),
+                  (-0.24, 1.46, "teto"), (0.06, 1.43, "vidro"), (0.85, 0.93, "lata"), (XF - 0.08, 0.74, "lata"),
+                  (XF, 0.70, None)],
+            cintura=[(XR, 1.00), (-1.40, 1.02), (0.85, 0.92), (XF, 0.92)],
+            larguras=[(XR, 0.84), (-1.30, 0.875), (0.95, 0.875), (XF, 0.81)],
+            janelas=[(-1.20, -0.08), (0.02, 0.82)], portas=[0.74, -0.06, -0.98])
     else:
         raise ValueError(tipo)
     s["xf"], s["xr"] = s["wb"] / 2, -s["wb"] / 2
@@ -1287,17 +1295,17 @@ def _spec_real(tipo):
 
 def _fundo_real(s, x):
     R = s["R"]
-    Ra = R + 0.032
+    Ra = R + 0.042
     z = s["zb"]
     for xw in (s["xf"], s["xr"]):
         d = abs(x - xw)
         if d <= Ra:
-            z = max(z, R + math.sqrt(max(Ra * Ra - d * d, 0)) + 0.012)
+            z = max(z, R + math.sqrt(max(Ra * Ra - d * d, 0)) + 0.022)
     return z
 
 
 def _estacoes_real(s):
-    Ra = s["R"] + 0.032
+    Ra = s["R"] + 0.042
     xs = {s["XR"], s["XR"] + 0.10, s["XF"], s["XF"] - 0.10}
     xs.update(x for x, _, _ in s["topo"])
     for a, b in s["janelas"]:
@@ -1325,22 +1333,35 @@ def _estacoes_real(s):
 
 
 def _belt_x(s, x):
-    """Linha de cintura: sobe um pouco para trás (kick-up), desce acompanhando o capô/porta-malas."""
-    sobe = s.get("kick", 0.0) * min(1.0, max(0.0, (0.3 - x) / (0.3 - s["XR"])))
-    return min(s["belt"] + sobe, _interp(s["topo"], x) - 0.035)
+    """Linha de cintura: segue 'cintura' (sobe da coluna A para a C) ou belt + kick; desce acompanhando o capô."""
+    if "cintura" in s:
+        base = _interp(s["cintura"], x)
+    else:
+        base = s["belt"] + s.get("kick", 0.0) * min(1.0, max(0.0, (0.3 - x) / (0.3 - s["XR"])))
+    return min(base, _interp(s["topo"], x) - 0.035)
 
 
-def _anel_real(s, x, ponta=0.0):
-    W = s["W"] * (1 - 0.045 * ponta)
+def _larg_x(s, x):
+    """Meia-largura na estação x (vista de cima: frente e traseira afinam)."""
+    return _interp(s["larguras"], x) if "larguras" in s else s["W"]
+
+
+def _anel_real(s, x, ponta=0.0, dz=0.0):
+    """dz = correção da altura do alto (ajuste automático contra o encolhimento da subdivisão)."""
+    W = _larg_x(s, x) * (1 - 0.045 * ponta)
     zb = _fundo_real(s, x) + 0.03 * ponta
-    zt = _interp(s["topo"], x) - 0.02 * ponta
+    zt = _interp(s["topo"], x) - 0.02 * ponta + dz
     belt = _belt_x(s, x) - 0.01 * ponta
     hc = s["roof"] - s["belt"]
     h = max(zt - belt, 0.035)
     f = min(1.0, max(0.0, (zt - s["belt"]) / hc))
     zs = min(zb + 0.07, belt - 0.30)
     zp = min(max(s["zb"] + 0.30, zs + 0.06), belt - 0.16)
-    p5y = W - 0.035 - s["tumble"] * f
+    # sobre a roda (capô baixo) a ordem dos pontos tem de valer: fundo < soleira < para-choque < cintura
+    zs = max(zs, zb + 0.03)
+    zp = max(zp, zs + 0.03)
+    belt = max(belt, zp + 0.03)
+    p5y = W - 0.03 - 0.05 * f
     return [
         (0.0, zb),
         (W - 0.07, zb),
@@ -1349,7 +1370,7 @@ def _anel_real(s, x, ponta=0.0):
         (W - 0.025, belt),
         (W - 0.03 - 0.02 * f, belt + min(0.03, 0.35 * h)),
         (p5y, belt + 0.81 * h),
-        (p5y - 0.05 - 0.07 * f, belt + 0.96 * h),
+        (p5y - 0.035 - 0.03 * f, belt + 0.96 * h),
         (0.0, zt),
     ]
 
@@ -1361,11 +1382,12 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
     s = _spec_real(tipo)
     root = vazio(name)
     xs = _estacoes_real(s)
+    dzs = [0.0] * len(xs)
     aneis = [_anel_real(s, x, 1.0 if i in (0, len(xs) - 1) else 0.0) for i, x in enumerate(xs)]
     topo, jan = s["topo"], s["janelas"]
     PINT, VIDRO, PLAST, BRILHO = 0, 1, 2, 3
     S = len(xs)
-    Ra = s["R"] + 0.032
+    Ra = s["R"] + 0.042
 
     def arco(xm):
         return any(abs(xm - xw) <= Ra * 1.12 for xw in (s["xf"], s["xr"]))
@@ -1394,8 +1416,23 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
             return PLAST
         return PINT
 
-    corpo = loft(name + "_lata", xs, aneis, [tinta, M["r_vidro"], M["r_plastico"], M["r_preto_brilho"]], mat_seg,
-                 crease={1: 0.6, 2: 0.95, 3: 0.35, 4: 0.75, 5: 0.5}, bojo=(0.05, 0.10), nivel=nivel)
+    mats_l = [tinta, M["r_vidro"], M["r_plastico"], M["r_preto_brilho"]]
+    vinco = {1: 0.6, 2: 0.95, 3: 0.35, 4: 0.75, 5: 0.5}
+    corpo = loft(name + "_lata", xs, aneis, mats_l, mat_seg, crease=vinco, bojo=(0.05, 0.10), nivel=nivel)
+    # ajuste automático da silhueta: a subdivisão encolhe a gaiola; mede o alto da superfície no eixo de cada
+    # estação e corrige a gaiola até o perfil bater com 'topo' (3 passadas)
+    for _ in range(3):
+        sup_ = Superficie(corpo)
+        for i, x in enumerate(xs):
+            xm = min(max(x, s["XR"] + 0.04), s["XF"] - 0.04)
+            loc, _n = sup_.raio((xm, 0, 5), (0, 0, -1))
+            if loc is not None:
+                dzs[i] += (_interp(s["topo"], xm) - loc.z) * 0.9
+        aneis = [_anel_real(s, x, 1.0 if i in (0, len(xs) - 1) else 0.0, dzs[i]) for i, x in enumerate(xs)]
+        me = corpo.data
+        bpy.data.objects.remove(corpo)
+        bpy.data.meshes.remove(me)
+        corpo = loft(name + "_lata", xs, aneis, mats_l, mat_seg, crease=vinco, bojo=(0.05, 0.10), nivel=nivel)
     filho(corpo, root)
 
     R, larg = s["R"], s["larg"]
@@ -1404,7 +1441,7 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
     filho(caixa(name + "_forro", ((s["XF"] + s["XR"]) / 2, 0, (s["zb"] + 2 * R + 0.05) / 2 + 0.02),
                 (s["XF"] - s["XR"] - 0.5, 2 * yi, 2 * R + 0.05 - s["zb"]), M["forro"], raio=0.2), root)
     rodas = []
-    yw = W - larg / 2 + 0.012
+    yw = _larg_x(s, s["xf"]) - larg / 2 + 0.012
     for lado, xw in (("d", s["xf"]), ("t", s["xr"])):
         for sy in (1, -1):
             rd = roda_real(f"{name}_roda_{lado}{'e' if sy > 0 else 'd'}", M, R, larg, s["aro"])
@@ -1525,7 +1562,7 @@ def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
         orn.append(tubo(name + "_santo", pts, 0.026, M["r_preto_brilho"]))
     # spoiler pequeno na borda do teto (hatch / SUV)
     if s["spoiler"]:
-        x_sp = [x for x, _, tg in topo if tg == "teto"][0]
+        x_sp = s.get("x_spoiler", [x for x, _, tg in topo if tg == "teto"][0])
         loc, _ = sup.raio((x_sp + 0.04, 0, 5), (0, 0, -1))
         if loc is not None:
             sp = caixa(name + "_spoiler", loc + Vector((-0.07, 0, -0.004)), (0.22, 2 * W * 0.78, 0.035),

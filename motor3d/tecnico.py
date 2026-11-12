@@ -251,7 +251,7 @@ def mat_emissivo(cor, forca=4.0, nome=None, alpha=1.0):
     return m
 
 
-def mat_raio_x(cor=RAIO_X, opac=0.15, nome="raio_x", borda=0.75):
+def mat_raio_x(cor=RAIO_X, opac=0.15, nome="raio_x", borda=0.55):
     """Lataria fantasma: casca transparente ciano, ~opac (15 %) de frente e até 'borda' nas silhuetas
     (Fresnel/Layer Weight). Emissiva: lê bem sobre o fundo escuro e não depende da luz."""
     m = bpy.data.materials.new(nome)
@@ -264,11 +264,11 @@ def mat_raio_x(cor=RAIO_X, opac=0.15, nome="raio_x", borda=0.75):
     lw.inputs["Blend"].default_value = 0.45
     pw = nt.nodes.new("ShaderNodeMath"); pw.operation = "POWER"; pw.inputs[1].default_value = 2.2
     mr = nt.nodes.new("ShaderNodeMapRange")
-    mr.inputs["To Min"].default_value = opac * 0.6
+    mr.inputs["To Min"].default_value = opac * 0.4
     mr.inputs["To Max"].default_value = borda
     em = nt.nodes.new("ShaderNodeEmission")
     em.inputs["Color"].default_value = lin(cor)
-    em.inputs["Strength"].default_value = 1.6
+    em.inputs["Strength"].default_value = 0.9
     tr = nt.nodes.new("ShaderNodeBsdfTransparent")
     mx = nt.nodes.new("ShaderNodeMixShader")
     nt.links.new(lw.outputs["Facing"], pw.inputs[0])
@@ -1762,6 +1762,13 @@ def corrente_moto(nome, loc=(0, 0, 0), estado="lubrificada", dentes=(14, 40), en
 
 
 # ============================================================ RAIO-X DO CARRO
+def mat_fosco(cor, rough=0.7, nome=None):
+    m, b = _principled(nome or f"fosco_{cor}")
+    b.inputs["Base Color"].default_value = lin(cor)
+    b.inputs["Roughness"].default_value = rough
+    return m
+
+
 def carro_raio_x(nome="carro", tipo="hatch", loc=(0, 0, 0), yaw=-30.0, opac=0.15, cor=RAIO_X, trem=True):
     """Carro 'real' de veiculos3 (não editado aqui: só importado) com a lataria trocada por raio-X ciano
     (Fresnel, ~15 %), deixando ver um trem de força simplificado (motor transversal + câmbio + semi-eixos,
@@ -1769,7 +1776,7 @@ def carro_raio_x(nome="carro", tipo="hatch", loc=(0, 0, 0), yaw=-30.0, opac=0.15
     import veiculos3 as v3
     Mv = {}
     D = v3.carro(nome, Mv, tipo, "prata", estilo="real", escala=1.0)
-    rx = mat_raio_x(cor, opac, nome + "_raio_x")
+    rx = mat_raio_x(cor, opac, nome + "_raio_x", borda=0.42)
     rodas = set()
     for r in D["rodas"]:
         rodas.add(r.name)
@@ -1795,7 +1802,7 @@ def carro_raio_x(nome="carro", tipo="hatch", loc=(0, 0, 0), yaw=-30.0, opac=0.15
         alu = M("rx_alu", lambda: mat_metal("#A7AFB8", 0.33, "rx_alu"))
         aco = M("rx_aco", lambda: mat_metal(ACO, 0.3, "rx_aco"))
         preto = M("rx_preto", lambda: mat_pintura("#1A1D22", "rx_preto"))
-        laranja = M("rx_motor", lambda: mat_pintura(LARANJA, "rx_motor"))
+        laranja = M("rx_motor", lambda: mat_fosco(LARANJA, 0.45, "rx_motor"))
         # motor 4 cil. transversal (ao longo de y), um pouco à frente do eixo dianteiro
         xm, zm = xf + 0.20, R + 0.22
         bloco = caixa(nome + "_bloco", xm - 0.17, xm + 0.13, -0.30, 0.22, zm - 0.20, zm + 0.16, [alu], chanfro=0.02)
@@ -1815,8 +1822,8 @@ def carro_raio_x(nome="carro", tipo="hatch", loc=(0, 0, 0), yaw=-30.0, opac=0.15
         for sy in (-1, 1):
             objs.append(cilindro(f"{nome}_semieixo{sy}", 0.016, (xf, sy * 0.05, R), (xf, sy * yr, R), segs=20, mats=[aco]))
         # radiador
-        objs.append(caixa(nome + "_radiador", xm + 0.30, xm + 0.34, -0.36, 0.36, R - 0.05, R + 0.40,
-                          [M("rx_rad", lambda: mat_metal("#59616B", 0.5, "rx_rad"))], chanfro=0.005))
+        objs.append(caixa(nome + "_radiador", xm + 0.33, xm + 0.36, -0.30, 0.30, R - 0.02, R + 0.26,
+                          [M("rx_rad", lambda: mat_fosco("#2A2F36", 0.6, "rx_rad"))], chanfro=0.004))
         # escapamento: do motor por baixo até a traseira, com abafador
         xr = -s["wb"] / 2
         esc = [(xm - 0.05, -0.05, zm - 0.18), (xm - 0.20, -0.05, 0.22), (xf - 0.45, 0.0, 0.17), (xr + 0.3, 0.02, 0.17)]
@@ -1825,7 +1832,7 @@ def carro_raio_x(nome="carro", tipo="hatch", loc=(0, 0, 0), yaw=-30.0, opac=0.15
         objs.append(cilindro(nome + "_abafador", 0.09, (xr + 0.30, 0.02, 0.21), (xr - 0.25, 0.02, 0.21), segs=40, mats=[aco]))
         # tanque e bancos
         objs.append(caixa(nome + "_tanque", xr + 0.35, xr + 0.95, -0.40, 0.40, 0.20, 0.42, [preto], chanfro=0.05, segs=3))
-        banco = M("rx_banco", lambda: mat_pintura("#2B3038", "rx_banco"))
+        banco = M("rx_banco", lambda: mat_fosco("#23272D", 0.8, "rx_banco"))
         for xb, largura in ((0.05, 0.25), (-0.85, 0.62)):
             for sy in ((-1, 1) if largura < 0.5 else (0,)):
                 yc = sy * 0.36
@@ -1847,6 +1854,7 @@ def carro_raio_x(nome="carro", tipo="hatch", loc=(0, 0, 0), yaw=-30.0, opac=0.15
                     "cambio": tuple(mw @ Vector((xf + 0.10, 0.52, R + 0.10))),
                     "roda_d": tuple(mw @ Vector((xf, -s["W"] - 0.05, R))),
                     "escape": tuple(mw @ Vector((-s["wb"] / 2 - 0.2, 0.02, 0.21))),
+                    "lataria": tuple(mw @ Vector((-0.55, -s["W"] - 0.01, 0.80))),
                     "centro": tuple(mw @ Vector((0, 0, 0.7)))}
     D["trem"] = objs
     D["mat_raio_x"] = rx

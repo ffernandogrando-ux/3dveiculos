@@ -55,15 +55,15 @@ def cena_raiox(escala, amostras):
     tc.nova_cena(res=(int(1080 * escala), int(1920 * escala)), amostras=amostras)
     bpy.context.scene.cycles.transparent_max_bounces = 24
     tc.estudio_tecnico(alvo=(0, 0, 0.6), luz=1.4)
-    D = tc.carro_raio_x("carro", "hatch", loc=(0.0, 0.0, 0.0), yaw=-58)
-    alvo = (0.05, 0.0, 0.55)
-    cam = tc.camera((0, -7, 3), alvo, lente=55)
-    tc.orbita(cam, alvo, 7.6, 0.0, 3.6)
+    D = tc.carro_raio_x("carro", "hatch", loc=(0.0, 0.0, 0.0), yaw=-68)
+    alvo = (0.0, 0.0, 0.55)
+    cam = tc.camera((0, -7, 3), alvo, lente=70)
+    tc.orbita(cam, alvo, 14.5, 0.0, 5.6)
     bpy.context.view_layer.update()
     co = []
-    co.append(chamada(D["ancoras"]["motor"], cam, (300, 700, -1), "MOTOR", "1.0 · 4 CILINDROS", tc.CIANO, escala, 36))
-    co.append(chamada(D["ancoras"]["cambio"], cam, (760, 640, 1), "CÂMBIO", None, tc.CIANO, escala, 36))
-    co.append(chamada(D["ancoras"]["escape"], cam, (760, 1500, 1), "ESCAPAMENTO", None, tc.CIANO, escala, 32))
+    co.append(chamada(D["ancoras"]["motor"], cam, (820, 1420, 1), "MOTOR", "TRANSVERSAL", tc.CIANO, escala, 36))
+    co.append(chamada(D["ancoras"]["lataria"], cam, (760, 560, 1), "LATARIA", "EM RAIO-X", tc.CIANO, escala, 36))
+    co.append(chamada(D["ancoras"]["roda_d"], cam, (330, 1400, -1), "RODAS", "ARO + PNEU", tc.CIANO, escala, 36))
     return D, co
 
 
@@ -82,6 +82,12 @@ def anim_motor(amostras=16, quadros=48, res=(720, 1280)):
     tc.nova_cena(res=res, amostras=amostras)
     sc = bpy.context.scene
     sc.render.use_persistent_data = True
+    c = sc.cycles                                   # perfil de vídeo: um pouco mais leve que o still
+    c.adaptive_threshold = 0.05
+    c.transmission_bounces = 3
+    c.glossy_bounces = 2
+    if hasattr(c, "denoising_quality"):
+        c.denoising_quality = "BALANCED"
     tc.estudio_tecnico(alvo=(0, 0, 0.25), luz=0.55)
     mt = tc.motor_corte("motor", loc=(0.055, 0, 0), yaw=-20, ang_vira=80)
     alvo = (0.0, 0.0, 0.25)
@@ -135,4 +141,4 @@ if __name__ == "__main__":
         pos_raiox(out, D, co)
         print(f"RAIOX: montagem {t1 - t0:.1f}s, render {t2 - t1:.1f}s")
     elif qual == "anim":
-        anim_motor(amostras)
+        anim_motor(amostras, quadros=int(os.environ.get("QUADROS", 48)))

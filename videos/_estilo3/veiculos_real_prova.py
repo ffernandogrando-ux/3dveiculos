@@ -173,8 +173,9 @@ def checar_rodas(D):
         for rd in D["rodas"]:
             inv = rd.matrix_world.inverted()
             pn = [c for c in rd.children if c.name.endswith("_pneu")][0]
-            R = max(pn.dimensions.x, pn.dimensions.z) / 2
-            w = pn.dimensions.y / 2
+            # medidas do pneu em coordenadas locais (dimensions já vem com a escala da raiz no Blender 5)
+            R = max(abs(v[0]) for v in pn.bound_box)
+            w = max(abs(v[1]) for v in pn.bound_box)
             for v in me.vertices:
                 p = inv @ (mw @ v.co)
                 if abs(p.y) < w and p.x * p.x + p.z * p.z < (R * 0.98) ** 2:
@@ -228,7 +229,12 @@ def cena_tecnico(amostras, escala):
     real (1:1, como o pneu e o motor em corte), 1080x1920, luz de produto: 2 strips laterais + topo + recorte."""
     import tecnico as tc
     tc.nova_cena(res=(int(1080 * escala), int(1920 * escala)), amostras=amostras)
-    tc.estudio_tecnico(fundo_y=5.0, raio_curva=2.2, largura=28.0, strips=False, top=False, rim=False)
+    est, _l = tc.estudio_tecnico(fundo_y=5.0, raio_curva=2.2, largura=28.0, strips=False, top=False, rim=False)
+    # o piso do estúdio técnico começa em y = -9: estende para trás da câmera com o mesmo material
+    bm = bmesh.new()
+    vs = [bm.verts.new(c) for c in ((-14, -40, -0.001), (14, -40, -0.001), (14, -9.0, -0.001), (-14, -9.0, -0.001))]
+    bm.faces.new(vs)
+    v3._obj("estudio_extensao", bm, est.data.materials[0])
     D = v3.carro("hatch_tecnico", {}, "hatch", "#D7262E", estilo="real", escala=1.0)
     D["raiz"].rotation_euler = (0, 0, math.radians(-58))
     bpy.context.view_layer.update()
@@ -244,7 +250,7 @@ def cena_tecnico(amostras, escala):
         if o.type == "MESH":
             col.objects.link(o)
     rim.light_linking.receiver_collection = col
-    tc.camera((1.5, -12.5, 1.9), (0.1, 0, 0.50), lente=45)
+    tc.camera((2.4, -19.6, 1.05), (0.1, 0, 0.60), lente=56)   # carro ~55 % da largura, câmera baixa
     tc.render(os.path.join(HERE, "carro_tecnico.png"))
 
 
