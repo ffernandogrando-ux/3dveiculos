@@ -69,8 +69,17 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
   Render: Standard (o AgX deixava pastel), oficina clara (parede #CFE6F2, rodapé amarelo).
 - Revisado em 3 rodadas por diretor de arte + revisor técnico (agentes). Notas finais ~6,5–7,5.
 
+**Feito (12/11/2026, tarde) — ESTILO ATUAL, preferido pelo usuário:**
+- O vinil vivo foi achado **infantil**. Novo estilo **"adulto"** (prancha `videos/_estilo4/proposta_adulta.jpg`):
+  - **Encenação:** Zé adulto (`motor3d/boneco_adulto.py`, `ze_adulto()`), ~40 anos, 6,5 cabeças, rosto com íris/barba,
+    macacão azul-petróleo #1F4E79 + laranja; oficina real limpa (`oficina()`); veículos `estilo="real"` de
+    `motor3d/veiculos3.py` (proporção real, pintura automotiva, sem rosto).
+  - **Mecanismo invisível:** cena técnica escura de montadora (`motor3d/tecnico.py`: `pneu_corte`, `motor_corte`,
+    `estudio_tecnico`, `callout_tela`); prova em `videos/_estilo4/mecanismo_prova.py` (~30–40 s/quadro 1080p).
+  - Vinil vivo (`boneco.py`, `_estilo3/`) e Parafuso (`pecas_veiculos.py`, `_estilo/`) ficam só como histórico.
+
 **Pendente, nesta ordem:**
-1. **Usuário aprovar** os quadros 9:16 do estilo vinil (`videos/_estilo3/quadros_lado_a_lado.jpg`) e o nome do canal.
+1. Lapidar o estilo adulto (Zé menos "manequim", carros sem cara de perua) e o usuário aprovar; aprovar o nome do canal.
 2. Para animar 70 s (apontado pelo revisor): pneu com sulco + `girar_rodas()` com sinal por lado; todas as mãos
    pré-criadas com troca por `hide_render`; unificar materiais (`boneco` usa mt.mat, `veiculos3` usa vinil());
    perfil de render de vídeo (720p, 16 amostras) medido em 10 quadros.
