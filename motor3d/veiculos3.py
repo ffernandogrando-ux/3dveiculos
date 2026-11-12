@@ -595,11 +595,14 @@ def aro_mat(M, cor=None):
 
 
 def carro(name, M, tipo="hatch", cor="prata", rosto=False, humor="feliz", olhar=(0.0, 0.0), placa_on=True,
-          nivel=2, aro=None, retrovisor=True):
+          nivel=2, aro=None, retrovisor=True, estilo="chibi", escala=0.5):
     """Carro de brinquedo de vinil. tipo: hatch | popular | suv | picape | seda. cor: nome, chave de M ou hex.
     rosto=True põe olhos NOS FARÓIS e boca na grade (humor: feliz | preocupado | assustado | bravo).
     aro=None (claro) ou cor do aro ('vermelho', '#FFC400'...). retrovisor=True põe os espelhinhos.
+    estilo="real": variante adulta (proporção real em metros, reduzida por `escala`; sem rosto).
     Devolve dict(raiz, rodas, lataria, rosto, corpo, partes)."""
+    if estilo == "real":
+        return _carro_real(name, M, tipo, cor, placa_on, nivel, escala)
     materiais(M)
     lat = lataria_mat(M, cor)
     s = _spec(tipo)
@@ -1014,3 +1017,491 @@ def _paralama(name, R, larg, angulos, m, loc=(0, 0, 0)):
     o.scale = (1, larg / 0.04, 1)
     o.location = loc
     return o
+
+
+# ######################################################################################################
+# ESTILO "REAL" — variante adulta (anúncio de montadora). Mesma técnica (gaiola única + subdivisão + raycast),
+# proporções reais em METROS, montadas em escala 1:1 e reduzidas pela raiz (escala=0.5 → 1:2 no mundo do motor).
+# Sem marca, sem rosto. Arquétipos: hatch (Polo/HB20/Onix), suv (T-Cross/Creta), picape (Strada), seda.
+# ######################################################################################################
+REAL_COR = {"vermelho": "#D7262E", "grafite": "#4A5058", "branco": "#F2F2EE", "azul": "#1F4E9C",
+            "prata": "#B9BEC4", "preto": "#16181B"}
+
+
+def _no(nt, tipo, **inp):
+    n = nt.nodes.new(tipo)
+    for k, v in inp.items():
+        n.inputs[k].default_value = v
+    return n
+
+
+def pintura(name, hexcol, metal=0.15, flocos=True):
+    """Pintura automotiva: base viva, verniz (coat 1.0, coat roughness 0.03), roughness 0.25, metálico leve e
+    "flocos" (Noise fino no normal da base, por baixo do verniz liso)."""
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    b = nt.nodes["Principled BSDF"]
+    b.inputs["Base Color"].default_value = lin(hexcol)
+    b.inputs["Roughness"].default_value = 0.25
+    b.inputs["Metallic"].default_value = metal
+    b.inputs["Coat Weight"].default_value = 1.0
+    b.inputs["Coat Roughness"].default_value = 0.03
+    b.inputs["Coat IOR"].default_value = 1.5
+    if flocos:
+        nz = _no(nt, "ShaderNodeTexNoise", Scale=900.0, Detail=1.0)
+        bp = _no(nt, "ShaderNodeBump", Strength=0.05, Distance=0.02)
+        nt.links.new(nz.outputs["Fac"], bp.inputs["Height"])
+        nt.links.new(bp.outputs["Normal"], b.inputs["Normal"])
+    return m
+
+
+def _pbr(name, hexcol, rough, metal=0.0, coat=0.0, spec=0.5, emit=0.0, emit_cor=None):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    b = m.node_tree.nodes["Principled BSDF"]
+    b.inputs["Base Color"].default_value = lin(hexcol)
+    b.inputs["Roughness"].default_value = rough
+    b.inputs["Metallic"].default_value = metal
+    b.inputs["Coat Weight"].default_value = coat
+    b.inputs["Coat Roughness"].default_value = 0.05
+    b.inputs["Specular IOR Level"].default_value = spec
+    if emit:
+        b.inputs["Emission Color"].default_value = lin(emit_cor or hexcol)
+        b.inputs["Emission Strength"].default_value = emit
+    return m
+
+
+REAL_BASE = {  # nome: (cor, rough, metal, coat, spec, emit)
+    "r_vidro": ("#151C24", 0.03, 0.0, 0.0, 1.0, 0.0),
+    "r_plastico": ("#1A1C1F", 0.62, 0.0, 0.0, 0.4, 0.0),
+    "r_preto_brilho": ("#0C0D0F", 0.12, 0.0, 1.0, 0.6, 0.0),
+    "r_borracha": ("#151618", 0.82, 0.0, 0.0, 0.3, 0.0),
+    "r_flanco": ("#2A2C30", 0.55, 0.0, 0.0, 0.4, 0.0),
+    "r_aluminio": ("#C9CED4", 0.18, 1.0, 0.3, 0.5, 0.0),
+    "r_aluminio_escuro": ("#5E646B", 0.3, 1.0, 0.2, 0.5, 0.0),
+    "r_cromo": ("#E6E9EC", 0.06, 1.0, 0.0, 0.5, 0.0),
+    "r_disco": ("#6D7176", 0.35, 1.0, 0.0, 0.5, 0.0),
+    "r_farol_lente": ("#10161C", 0.03, 0.0, 1.0, 0.9, 0.0),
+    "r_farol_refletor": ("#D9DEE3", 0.12, 1.0, 0.0, 0.5, 0.0),
+    "r_drl": ("#F2F6FF", 0.2, 0.0, 0.0, 0.5, 6.0),
+    "r_lanterna": ("#7A0B12", 0.06, 0.0, 1.0, 0.8, 0.6),
+    "r_lanterna_luz": ("#FF2A2A", 0.2, 0.0, 0.0, 0.5, 3.0),
+    "r_pisca": ("#E07A12", 0.1, 0.0, 1.0, 0.6, 0.3),
+    "r_placa": ("#F4F4F0", 0.35, 0.0, 0.3, 0.5, 0.0),
+    "r_placa_faixa": ("#1F4FA3", 0.35, 0.0, 0.3, 0.5, 0.0),
+    "r_junta": ("#08090A", 0.9, 0.0, 0.0, 0.1, 0.0),
+    "r_banco": ("#141517", 0.55, 0.0, 0.2, 0.4, 0.0),
+    "r_motor": ("#3B3F44", 0.35, 0.8, 0.0, 0.5, 0.0),
+    "r_motor_claro": ("#8D9399", 0.28, 1.0, 0.0, 0.5, 0.0),
+    "r_corrente": ("#2A2B2D", 0.4, 0.9, 0.0, 0.5, 0.0),
+    "r_painel": ("#0E1013", 0.2, 0.0, 0.8, 0.6, 0.0),
+}
+
+
+def materiais_real(M):
+    for n, (c, r, me, co, sp, e) in REAL_BASE.items():
+        if n not in M:
+            M[n] = _pbr("v3_" + n, c, r, me, co, sp, e)
+    for n in ("placa", "placa_faixa"):   # placa() usa estas chaves
+        M.setdefault(n, M["r_" + n])
+    return M
+
+
+def pintura_mat(M, cor):
+    hx = REAL_COR.get(cor, LATARIA.get(cor, cor))
+    k = "pint_" + hx.lstrip("#")
+    if k not in M:
+        M[k] = pintura("v3_" + k, hx)
+    return M[k]
+
+
+def _liso_angulo(o, ang=40):
+    me = o.data
+    me.shade_smooth()
+    if hasattr(me, "set_sharp_from_angle"):
+        me.set_sharp_from_angle(angle=math.radians(ang))
+    return o
+
+
+def fita(name, sup, amostras, larg, esp, m, embute=0.004, perfil=None):
+    """Faixa colada na superfície (farol em lâmina, lanterna, grade, junta de porta…). amostras = [(origem,
+    direção)], raycast em cada uma; a faixa fica perpendicular à curva e à normal, com espessura esp para fora.
+    larg = largura (número ou função t->largura); perfil(t) desloca a faixa ao longo da normal (abaulado)."""
+    pts = []
+    for o, d in amostras:
+        loc, nor = sup.raio(o, d)
+        if loc is not None:
+            pts.append((loc, nor))
+    if len(pts) < 2:
+        return None
+    bm = bmesh.new()
+    rings = []
+    n = len(pts)
+    for i, (loc, nor) in enumerate(pts):
+        t = i / (n - 1)
+        a = pts[max(i - 1, 0)][0]
+        b2 = pts[min(i + 1, n - 1)][0]
+        tg = (b2 - a).normalized()
+        side = nor.cross(tg).normalized()
+        w = (larg(t) if callable(larg) else larg) / 2
+        e = esp + (perfil(t) if perfil else 0.0)
+        rings.append([bm.verts.new(loc + side * w + nor * e), bm.verts.new(loc - side * w + nor * e),
+                      bm.verts.new(loc - side * w - nor * embute), bm.verts.new(loc + side * w - nor * embute)])
+    for i in range(n - 1):
+        a, b2 = rings[i], rings[i + 1]
+        for k in range(4):
+            k2 = (k + 1) % 4
+            bm.faces.new([a[k], a[k2], b2[k2], b2[k]])
+    bm.faces.new(list(reversed(rings[0])))
+    bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    o = _obj(name, bm, m)
+    return _liso_angulo(o, 35)
+
+
+def _canto(XF, sy, y, z, t_canto, sx=1):
+    """Raio que varre a frente (sx=1) ou a traseira (sx=-1) e dobra a quina: t_canto 0 = reto, 1 = pela lateral."""
+    d = Vector((-sx * (1 - t_canto), -sy * t_canto * 1.2, 0)).normalized()
+    alvo = Vector((XF - sx * 0.25 * t_canto, sy * y, z))
+    return alvo - d * 3.0, d
+
+
+# ---------------------------------------------------------------- rodas reais
+def roda_real(name, M, R=0.31, larg=0.195, aro_r=0.19, raios=5, moto=False):
+    """Pneu com banda (2 sulcos) e flanco + aro de liga de N raios + disco de freio. Eixo y, centro na origem."""
+    root = vazio(name)
+    w = larg / 2
+    if moto:   # pneu de moto: banda redonda
+        meio = [(R, 0.0, 0)] + [(R - (1 - math.cos(a)) * w * 0.9, math.sin(a) * w, 0)
+                                for a in (math.radians(v) for v in (20, 40, 60, 75))]
+        flanco = [(R - w * 1.05, w * 0.98, 1), ((R + aro_r) / 2, w * 0.92, 1), (aro_r + 0.018, w * 0.7, 1),
+                  (aro_r + 0.004, w * 0.62, 1)]
+    else:
+        g = 0.007
+        meio = [(R, 0.0, 0), (R, w * 0.14, 0), (R - g, w * 0.15, 0), (R - g, w * 0.24, 0), (R, w * 0.25, 0),
+                (R, w * 0.62, 0), (R - g, w * 0.63, 0), (R - g, w * 0.70, 0), (R, w * 0.71, 0), (R, w * 0.86, 0),
+                (R - 0.008, w * 0.96, 0), (R - 0.025, w * 1.0, 1)]
+        flanco = [(R - 0.06, w * 1.02, 1), ((R + aro_r) / 2 + 0.01, w * 1.0, 1), (aro_r + 0.03, w * 0.92, 1),
+                  (aro_r + 0.006, w * 0.84, 1)]
+    meia = meio + flanco
+    perfil = [(r, -y, mi) for (r, y, mi) in reversed(meia[1:])] + meia
+    # material do trecho seguinte (lado de trás espelhado)
+    pf = []
+    for i, (r, y, mi) in enumerate(perfil):
+        nxt = perfil[i + 1][2] if i + 1 < len(perfil) else mi
+        pf.append((r, y, max(mi, nxt) if y < 0 else mi))
+    pneu = torno(name + "_pneu", pf, [M["r_borracha"], M["r_flanco"]], seg=96)
+    filho(pneu, root)
+    yb = (w * 0.84) if not moto else w * 0.62
+    # aro: borda (lábio) + tambor
+    aro = torno(name + "_aro", [(aro_r + 0.012, yb, 0), (aro_r + 0.012, yb - 0.008, 0), (aro_r - 0.006, yb - 0.014, 0),
+                                (aro_r - 0.012, yb - 0.03, 1), (aro_r - 0.012, -yb + 0.02, 1),
+                                (aro_r + 0.012, -yb, 1), (aro_r + 0.012, -yb - 0.004, 1)],
+                [M["r_aluminio"], M["r_aluminio_escuro"]], seg=96)
+    filho(aro, root)
+    # fundo escuro atrás dos raios + disco de freio
+    filho(torno(name + "_fundo", [(0.0, -0.01, 0), (aro_r - 0.01, -0.01, 0)], [M["r_plastico"]], seg=48), root)
+    disco_r = aro_r * (0.78 if not moto else 0.75)
+    ydisc = yb - 0.06 if not moto else w * 0.4
+    filho(torno(name + "_disco", [(disco_r * 0.45, ydisc, 0), (disco_r, ydisc, 0), (disco_r, ydisc - 0.012, 0),
+                                  (disco_r * 0.45, ydisc - 0.012, 0)], [M["r_disco"]], seg=64), root)
+    # cubo + raios
+    yc = yb - 0.012
+    cubo = torno(name + "_cubo", [(0.0, yc + 0.006, 1), (0.03, yc + 0.006, 1), (0.034, yc, 0), (0.06, yc - 0.004, 0),
+                                  (0.065, yc - 0.03, 0), (0.0, yc - 0.03, 0)],
+                 [M["r_aluminio"], M["r_preto_brilho"]], seg=48)
+    filho(cubo, root)
+    comp = aro_r - 0.05
+    for k in range(raios):
+        a = 2 * math.pi * k / raios
+        if moto:
+            rr = caixa(f"{name}_raio{k}", (0, 0, 0), (0.016, 0.012, comp + 0.02), M["r_aluminio_escuro"], raio=0.3)
+        else:
+            rr = caixa(f"{name}_raio{k}", (0, 0, 0), (0.046, 0.024, comp + 0.02), M["r_aluminio"], raio=0.25)
+        mid = 0.055 + comp / 2
+        rr.location = (math.sin(a) * mid, yc - 0.012 - (0.006 if not moto else 0.0), math.cos(a) * mid)
+        rr.rotation_euler = (0, a, 0)
+        filho(rr, root)
+    return root
+
+
+# ---------------------------------------------------------------- carros reais
+def _spec_real(tipo):
+    s = dict(R=0.32, larg=0.205, aro=0.205, W=0.875, zb=0.19, belt=0.96, roof=1.48, tumble=0.15,
+             cover=False, clad=False, rails=False, santo=False)
+    if tipo == "hatch":       # Polo / HB20 / Onix: 4,0 x 1,75 x 1,48 m
+        s.update(wb=2.55, fr=0.82, tr=0.63)
+        P = lambda XF, XR: dict(
+            topo=[(XR, 0.88, "lata"), (XR + 0.10, 1.02, "vidro"), (XR + 0.58, 1.40, "teto"), (0.30, 1.47, "vidro"),
+                  (1.10, 0.99, "lata"), (XF - 0.24, 0.84, "lata"), (XF - 0.06, 0.74, "lata"), (XF, 0.68, None)],
+            janelas=[(XR + 0.62, -0.08), (0.02, 1.06)], portas=[0.90, -0.06, -1.00])
+    elif tipo == "suv":       # T-Cross / Creta: 4,2 x 1,78 x 1,60 m
+        s.update(wb=2.65, fr=0.86, tr=0.70, W=0.89, R=0.34, larg=0.215, aro=0.215, zb=0.24, belt=1.06,
+                 roof=1.60, tumble=0.12, clad=True, rails=True)
+        P = lambda XF, XR: dict(
+            topo=[(XR, 0.98, "lata"), (XR + 0.09, 1.15, "vidro"), (XR + 0.32, 1.55, "teto"), (0.36, 1.60, "vidro"),
+                  (1.12, 1.10, "lata"), (XF - 0.26, 0.97, "lata"), (XF - 0.06, 0.86, "lata"), (XF, 0.80, None)],
+            janelas=[(XR + 0.34, -0.08), (0.02, 1.10)], portas=[0.94, -0.06, -1.04])
+    elif tipo == "picape":    # Strada cabine simples/estendida com capota marítima: 4,5 x 1,73 x 1,55 m
+        s.update(wb=2.74, fr=0.84, tr=0.92, W=0.865, R=0.32, larg=0.205, zb=0.22, belt=1.00, roof=1.55,
+                 cover=True, santo=True, xc=-0.42)
+        P = lambda XF, XR: dict(
+            topo=[(XR, 1.03, "capota"), (s["xc"] - 0.09, 1.03, "lata"), (s["xc"] - 0.07, 1.12, "vidro"),
+                  (s["xc"] + 0.03, 1.51, "teto"), (0.36, 1.55, "vidro"), (1.12, 1.03, "lata"),
+                  (XF - 0.24, 0.89, "lata"), (XF - 0.06, 0.78, "lata"), (XF, 0.72, None)],
+            janelas=[(s["xc"] + 0.14, 1.10)], portas=[0.92, s["xc"] + 0.04])
+    elif tipo == "seda":      # sedã compacto: 4,5 x 1,75 x 1,47 m
+        s.update(wb=2.60, fr=0.85, tr=1.02, W=0.875, zb=0.18, belt=0.95, roof=1.47)
+        P = lambda XF, XR: dict(
+            topo=[(XR, 0.86, "lata"), (XR + 0.14, 0.99, "lata"), (XR + 0.46, 1.04, "vidro"), (XR + 1.02, 1.42, "teto"),
+                  (0.32, 1.47, "vidro"), (1.12, 0.99, "lata"), (XF - 0.24, 0.84, "lata"), (XF - 0.06, 0.74, "lata"),
+                  (XF, 0.68, None)],
+            janelas=[(XR + 1.06, -0.08), (0.02, 1.08)], portas=[0.90, -0.06, -1.00])
+    else:
+        raise ValueError(tipo)
+    s["xf"], s["xr"] = s["wb"] / 2, -s["wb"] / 2
+    s["XF"], s["XR"] = s["xf"] + s["fr"], s["xr"] - s["tr"]
+    s.update(P(s["XF"], s["XR"]))
+    return s
+
+
+def _fundo_real(s, x):
+    R = s["R"]
+    Ra = R + 0.045
+    z = s["zb"]
+    for xw in (s["xf"], s["xr"]):
+        d = abs(x - xw)
+        if d <= Ra:
+            z = max(z, R + math.sqrt(max(Ra * Ra - d * d, 0)) + 0.012)
+    return z
+
+
+def _estacoes_real(s):
+    Ra = s["R"] + 0.045
+    xs = {s["XR"], s["XR"] + 0.10, s["XF"], s["XF"] - 0.10}
+    xs.update(x for x, _, _ in s["topo"])
+    for a, b in s["janelas"]:
+        xs.update((a, b))
+    for xw in (s["xf"], s["xr"]):
+        for d in (-1.10, -1.03, -1.0, -0.92, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 0.92, 1.0, 1.03, 1.10):
+            xs.add(xw + d * Ra)
+    xs = sorted(x for x in xs if s["XR"] - 1e-6 <= x <= s["XF"] + 1e-6)
+    out = []
+    for x in xs:
+        if out and x - out[-1] < 0.018:
+            continue
+        out.append(x)
+    # nenhum vão maior que 0,35 m
+    cheio = [out[0]]
+    for x in out[1:]:
+        n = int((x - cheio[-1]) / 0.35)
+        if n:
+            x0 = cheio[-1]
+            for k in range(1, n + 1):
+                cheio.append(x0 + (x - x0) * k / (n + 1))
+        cheio.append(x)
+    cheio[0], cheio[-1] = s["XR"], s["XF"]
+    return cheio
+
+
+def _belt_x(s, x):
+    """Linha de cintura: reta ao longo da cabine, desce acompanhando o capô/porta-malas."""
+    return min(s["belt"], _interp(s["topo"], x) - 0.035)
+
+
+def _anel_real(s, x, ponta=0.0):
+    W = s["W"] * (1 - 0.045 * ponta)
+    zb = _fundo_real(s, x) + 0.03 * ponta
+    zt = _interp(s["topo"], x) - 0.02 * ponta
+    belt = _belt_x(s, x) - 0.01 * ponta
+    hc = s["roof"] - s["belt"]
+    h = max(zt - belt, 0.035)
+    f = min(1.0, max(0.0, (zt - s["belt"]) / hc))
+    zs = min(zb + 0.07, belt - 0.30)
+    zp = min(max(s["zb"] + 0.30, zs + 0.06), belt - 0.16)
+    p5y = W - 0.035 - s["tumble"] * f
+    return [
+        (0.0, zb),
+        (W - 0.07, zb),
+        (W - 0.03, zs),
+        (W, zp),
+        (W - 0.025, belt),
+        (W - 0.03 - 0.02 * f, belt + min(0.03, 0.35 * h)),
+        (p5y, belt + 0.84 * h),
+        (p5y - 0.05 - 0.07 * f, belt + 0.965 * h),
+        (0.0, zt),
+    ]
+
+
+def _carro_real(name, M, tipo, cor, placa_on=True, nivel=2, escala=0.5):
+    materiais(M)
+    materiais_real(M)
+    tinta = pintura_mat(M, cor)
+    s = _spec_real(tipo)
+    root = vazio(name)
+    xs = _estacoes_real(s)
+    aneis = [_anel_real(s, x, 1.0 if i in (0, len(xs) - 1) else 0.0) for i, x in enumerate(xs)]
+    topo, jan = s["topo"], s["janelas"]
+    PINT, VIDRO, PLAST, BRILHO = 0, 1, 2, 3
+    S = len(xs)
+    Ra = s["R"] + 0.045
+
+    def arco(xm):
+        return any(abs(xm - xw) <= Ra * 1.12 for xw in (s["xf"], s["xr"]))
+
+    def mat_seg(i, j):
+        if i == -1 or i == S - 1:
+            return PLAST if j == 1 else PINT
+        xm = (xs[i] + xs[i + 1]) / 2
+        tg = _tag(topo, xm)
+        if j in (6, 7) and tg == "vidro":
+            return VIDRO
+        if j in (6, 7) and tg == "capota":
+            return PLAST
+        if j == 5:
+            if any(a <= xm <= b for a, b in jan):
+                return VIDRO
+            if len(jan) > 1 and jan[0][1] <= xm <= jan[1][0]:
+                return BRILHO       # coluna B em preto brilhante
+        if j == 0:
+            return PLAST
+        if j == 1 and (i <= 1 or i >= S - 3):
+            return PLAST           # parte de baixo dos para-choques
+        if s["clad"] and (j == 1 or (j == 2 and arco(xm))):
+            return PLAST
+        return PINT
+
+    corpo = loft(name + "_lata", xs, aneis, [tinta, M["r_vidro"], M["r_plastico"], M["r_preto_brilho"]], mat_seg,
+                 crease={1: 0.6, 2: 0.95, 3: 0.35, 4: 0.75, 5: 0.5}, bojo=(0.05, 0.10), nivel=nivel)
+    filho(corpo, root)
+
+    R, larg = s["R"], s["larg"]
+    W = s["W"]
+    yi = W - larg - 0.06
+    filho(caixa(name + "_forro", ((s["XF"] + s["XR"]) / 2, 0, (s["zb"] + 2 * R + 0.05) / 2 + 0.02),
+                (s["XF"] - s["XR"] - 0.5, 2 * yi, 2 * R + 0.05 - s["zb"]), M["forro"], raio=0.2), root)
+    rodas = []
+    yw = W - larg / 2 + 0.004
+    for lado, xw in (("d", s["xf"]), ("t", s["xr"])):
+        for sy in (1, -1):
+            rd = roda_real(f"{name}_roda_{lado}{'e' if sy > 0 else 'd'}", M, R, larg, s["aro"])
+            if sy < 0:
+                rd.rotation_euler = (0, 0, math.pi)
+            filho(rd, root, (xw, sy * yw, R))
+            rodas.append(rd)
+
+    sup = Superficie(corpo)
+    XF, XR = s["XF"], s["XR"]
+    orn = []
+    zfa = _interp(topo, XF - 0.20) - 0.075         # altura dos faróis: logo abaixo da borda do capô
+    # ---- faróis em lâmina (carcaça escura + DRL de LED na borda de cima) e grade
+    for sy in (1, -1):
+        am = [_canto(XF, sy, W * (0.42 + 0.50 * t), zfa + 0.02 * t, max(0, (t - 0.55) / 0.45) ** 1.5)
+              for t in [k / 14 for k in range(15)]]
+        f = fita(f"{name}_farol{sy}", sup, am, lambda t: 0.085 - 0.025 * t, 0.004, M["r_farol_lente"])
+        d = fita(f"{name}_drl{sy}", sup, [(o + Vector((0, 0, 0.032)), dd) for o, dd in am[1:]],
+                 0.012, 0.007, M["r_drl"])
+        r_ = fita(f"{name}_refletor{sy}", sup, [(o + Vector((0, 0, -0.008)), dd) for o, dd in am[1:9]],
+                  0.035, 0.006, M["r_farol_refletor"])
+        orn += [x for x in (f, d, r_) if x]
+    zg = zfa - 0.13
+    gr = fita(name + "_grade", sup, [((XF + 3, W * (-0.46 + 0.92 * k / 14), zg), (-1, 0, 0)) for k in range(15)],
+              lambda t: 0.15 - 0.03 * abs(2 * t - 1), 0.006, M["r_preto_brilho"])
+    for q in range(3):   # filetes horizontais da grade
+        fl = fita(f"{name}_grade_filete{q}", sup, [((XF + 3, W * (-0.43 + 0.86 * k / 14), zg - 0.04 + 0.04 * q),
+                                                    (-1, 0, 0)) for k in range(15)], 0.008, 0.009,
+                  M["r_aluminio_escuro"])
+        if fl:
+            orn.append(fl)
+    friso = fita(name + "_friso", sup, [((XF + 3, W * (-0.40 + 0.80 * k / 12), zfa - 0.045), (-1, 0, 0))
+                                         for k in range(13)], 0.012, 0.009, M["r_cromo"])
+    zi = s["zb"] + 0.20
+    tomada = fita(name + "_tomada", sup, [((XF + 3, W * (-0.62 + 1.24 * k / 16), zi), (-1, 0, 0)) for k in range(17)],
+                  lambda t: 0.10 + 0.05 * math.sin(math.pi * t), 0.004, M["r_preto_brilho"], embute=0.02)
+    orn += [x for x in (gr, friso, tomada) if x]
+    for sy in (1, -1):   # faróis de neblina nas pontas da tomada
+        nb = elipsoide(f"{name}_neblina{sy}", (0, 0, 0), (0.012, 0.045, 0.022), M["r_drl"])
+        colar(nb, sup, (XF + 3, sy * W * 0.70, zi + 0.01), (-1, 0, 0), embute=0.004)
+        orn.append(nb)
+    # ---- lanternas traseiras (lâmina que dobra a quina)
+    zl = _interp(topo, XR + 0.05) - 0.10
+    for sy in (1, -1):
+        am = [_canto(XR, sy, W * (0.40 + 0.52 * t), zl, max(0, (t - 0.5) / 0.5) ** 1.5, sx=-1)
+              for t in [k / 14 for k in range(15)]]
+        lt = fita(f"{name}_lanterna{sy}", sup, am, lambda t: 0.075 - 0.02 * t, 0.004, M["r_lanterna"])
+        ll = fita(f"{name}_lanterna_luz{sy}", sup, [(o + Vector((0, 0, 0.012)), dd) for o, dd in am[2:]],
+                  0.010, 0.007, M["r_lanterna_luz"])
+        orn += [x for x in (lt, ll) if x]
+    td = fita(name + "_difusor", sup, [((XR - 3, W * (-0.6 + 1.2 * k / 14), s["zb"] + 0.12), (1, 0, 0))
+                                       for k in range(15)], 0.07, 0.002, M["r_plastico"], embute=0.02)
+    if td:
+        orn.append(td)
+    # ---- juntas de porta (frisos finos escuros) e maçanetas
+    portas = s["portas"]
+    for k, xp in enumerate(portas):
+        zt_ = _belt_x(s, xp) - 0.015
+        z0 = max(_fundo_real(s, xp), s["zb"]) + 0.09
+        for sy in (1, -1):
+            am = [((xp - 0.02 * (zz - z0), sy * 3, zz), (0, -sy, 0)) for zz in
+                  [z0 + (zt_ - z0) * q / 10 for q in range(11)]]
+            j_ = fita(f"{name}_junta{k}{sy}", sup, am, 0.006, 0.0006, M["r_junta"], embute=0.004)
+            if j_:
+                orn.append(j_)
+    for k in range(len(portas) - 1):
+        xm = portas[k + 1] - 0.16          # maçaneta perto da borda de trás de cada porta
+        for sy in (1, -1):
+            mc = caixa(f"{name}_macaneta{k}{sy}", (0, 0, 0), (0.022, 0.13, 0.026), tinta, raio=0.45)
+            colar(mc, sup, (xm, sy * 3, _belt_x(s, xm) - 0.085), (0, -sy, 0), embute=0.006)
+            orn.append(mc)
+    # ---- retrovisores: base preta + concha na cor
+    xb = max(x for x, _, tg in topo[:-1] if tg == "lata" and x < XF - 0.3) - 0.10
+    for sy in (1, -1):
+        loc, nor = sup.raio((xb, sy * 3, _belt_x(s, xb) - 0.01), (0, -sy, 0))
+        if loc is None:
+            continue
+        base = caixa(f"{name}_retro_base{sy}", loc + Vector((0, sy * 0.04, 0.02)), (0.12, 0.10, 0.07),
+                     M["r_plastico"], raio=0.35)
+        concha = caixa(f"{name}_retro{sy}", loc + Vector((-0.03, sy * 0.17, 0.07)), (0.13, 0.25, 0.15),
+                       tinta, raio=0.42)
+        concha.rotation_euler = (0, 0, -sy * math.radians(10))
+        pisca = caixa(f"{name}_retro_pisca{sy}", loc + Vector((0.03, sy * 0.20, 0.03)), (0.012, 0.15, 0.014),
+                      M["r_pisca"], raio=0.4)
+        orn += [base, concha, pisca]
+    # ---- placas Mercosul (sem letras)
+    if placa_on:
+        for lado, sx, z in (("d", 1, zi + 0.12), ("t", -1, zl - 0.25)):
+            pl = placa(f"{name}_placa_{lado}", M, larg=0.40, alt=0.13, esp=0.012)
+            loc, nor = sup.raio((sx * 5, 0, z), (-sx, 0, 0))
+            if loc is not None:
+                pl.location = loc + nor * 0.004
+                pl.rotation_euler = (0, 0, 0 if sx > 0 else math.pi)
+                orn.append(pl)
+    # ---- barras de teto (SUV) e santo-antônio (picape)
+    if s["rails"]:
+        for sy in (1, -1):
+            pts = []
+            for x in (XR + 0.35, XR + 0.7, 0.2, 0.42):
+                loc, _ = sup.raio((x, sy * (W - 0.20), 5), (0, 0, -1))
+                pts.append(loc + Vector((0, 0, 0.035)))
+            pts[0].z -= 0.03
+            pts[-1].z -= 0.03
+            orn.append(tubo(f"{name}_barra{sy}", pts, 0.016, M["r_aluminio_escuro"]))
+    if s["santo"]:
+        xs_ = s["xc"] - 0.25
+        loc, _ = sup.raio((xs_, W - 0.08, 5), (0, 0, -1))
+        z0 = loc.z - 0.01
+        pts = [(xs_, W - 0.08, z0), (xs_, W - 0.09, z0 + 0.26), (xs_ + 0.02, W - 0.22, z0 + 0.32),
+               (xs_ + 0.02, 0, z0 + 0.33)]
+        pts = pts + [(p[0], -p[1], p[2]) for p in reversed(pts[:-1])]
+        orn.append(tubo(name + "_santo", pts, 0.026, M["r_preto_brilho"]))
+    # antena tubarão
+    loc, _ = sup.raio((XR + 0.55, 0, 5), (0, 0, -1))
+    if loc is not None and tipo != "picape":
+        orn.append(caixa(name + "_antena", loc + Vector((0, 0, 0.02)), (0.16, 0.06, 0.06), M["r_preto_brilho"],
+                         raio=0.45))
+    for o in orn:
+        filho(o, root)
+    root.scale = (escala, escala, escala)
+    return {"raiz": root, "rodas": rodas, "lataria": [corpo], "rosto": None, "corpo": corpo,
+            "partes": {"corpo": corpo, "ornamentos": orn}, "spec": s}
