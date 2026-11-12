@@ -239,6 +239,16 @@ def importar(caminho, nome="personagem", altura=None, pai=None):
     return P
 
 
+def carregar_acoes(caminho):
+    """Só as ações de um arquivo (ex.: a biblioteca UAL): importa, apaga os objetos e devolve as ações.
+    Servem em qualquer personagem com os mesmos nomes de osso (UAL ↔ UBC ↔ manequim UE)."""
+    bpy = _bpy()
+    P = importar(caminho, "_tmp_acoes")
+    ac = P["acoes"]
+    apagar(P["raiz"])
+    return ac
+
+
 def acoes(P):
     """Nomes das ações do personagem (importadas com ele)."""
     return [a.name for a in P["acoes"]]
