@@ -76,6 +76,11 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
     `motor3d/veiculos3.py` (proporção real, pintura automotiva, sem rosto).
   - **Mecanismo invisível:** cena técnica escura de montadora (`motor3d/tecnico.py`: `pneu_corte`, `motor_corte`,
     `estudio_tecnico`, `callout_tela`); prova em `videos/_estilo4/mecanismo_prova.py` (~30–40 s/quadro 1080p).
+  - Cenas técnicas prontas: pneu, motor, corrente da moto (`corrente_moto`), raio-X do carro (`carro_raio_x`);
+    animação de teste `videos/_estilo4/teste_motor.mp4` (48 quadros 720p/16 amostras ≈ 15–18 s/quadro em CPU,
+    medido com outros renders rodando junto) — `videos/_estilo4/cenas_tecnicas2.py`.
+  - Zé adulto v2 com ajustes do diretor de arte (contrapposto, joelhos, bolsos, mãos, pálpebra, cabelo).
+  - Ponto fraco: carros reais (hatch/SUV ainda com cara de perua); picape e motos ok.
   - Vinil vivo (`boneco.py`, `_estilo3/`) e Parafuso (`pecas_veiculos.py`, `_estilo/`) ficam só como histórico.
 
 **Pendente, nesta ordem:**
