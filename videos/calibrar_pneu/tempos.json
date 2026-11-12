@@ -1,20 +1,62 @@
 {
- "fonte": "estimado pela tabela do roteiro (trocar pelos tempos do .srt quando chegar)",
- "duracao": 69.0,
+ "fonte": "tempos reais da narra\u00e7\u00e3o (faster-whisper, palavras.json)",
+ "duracao": 66.2,
  "planos": {
-  "A_gancho":      [0.0, 4.0],
-  "B_dinheiro":    [4.0, 6.0],
-  "C_olha_so":     [6.0, 7.0],
-  "D_chute":       [7.0, 11.0],
-  "E_perde_ar":    [11.0, 18.0],
-  "F_achata":      [18.0, 25.0],
-  "G_esquenta":    [25.0, 31.0],
-  "H_resultado":   [31.0, 36.0],
-  "I_posto":       [36.0, 40.0],
-  "J_quente":      [40.0, 46.0],
-  "K_max":         [46.0, 54.0],
-  "L_certo":       [54.0, 62.0],
-  "M_manda":       [62.0, 66.0],
-  "N_final":       [66.0, 69.0]
+  "A_gancho": [
+   0.0,
+   4.5
+  ],
+  "B_dinheiro": [
+   4.5,
+   7.68
+  ],
+  "C_olha_so": [
+   7.68,
+   8.18
+  ],
+  "D_chute": [
+   8.18,
+   11.92
+  ],
+  "E_perde_ar": [
+   11.92,
+   19.62
+  ],
+  "F_achata": [
+   19.62,
+   26.14
+  ],
+  "G_esquenta": [
+   26.14,
+   33.0
+  ],
+  "H_resultado": [
+   33.0,
+   37.66
+  ],
+  "I_posto": [
+   37.66,
+   40.6
+  ],
+  "J_quente": [
+   40.6,
+   46.76
+  ],
+  "K_max": [
+   46.76,
+   53.16
+  ],
+  "L_certo": [
+   53.16,
+   61.04
+  ],
+  "M_manda": [
+   61.04,
+   63.52
+  ],
+  "N_final": [
+   63.52,
+   66.2
+  ]
  }
 }
