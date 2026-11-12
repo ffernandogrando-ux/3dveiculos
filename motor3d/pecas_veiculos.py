@@ -27,7 +27,7 @@ LATARIA = {"branco": "#F2F0EA", "prata": "#C3C8CE", "cinza": "#7D848C", "preto":
 
 VEI = {  # nome: (cor, rugosidade)
     # Parafuso
-    "aco": ("#AEB8C2", 0.55), "aco_escuro": ("#7E8A96", 0.6), "macacao": ("#2F6FB3", 0.92),
+    "aco": ("#D5DCE3", 0.35), "aco_escuro": ("#8C98A4", 0.5), "macacao": ("#2F6FB3", 0.92),
     "macacao_escuro": ("#24588F", 0.92), "luva": ("#FF7A1A", 0.85), "bota": ("#2A2E35", 0.8),
     "olho_p": ("#FFFFFF", 0.5), "pupila_p": ("#161A1F", 0.4), "boca_p": ("#6E2A2A", 0.7), "lingua_p": ("#FF8C7A", 0.8),
     "bochecha_p": ("#FF9A7A", 0.9), "sobr_p": ("#2A2E35", 0.7), "bolso_p": ("#FF7A1A", 0.9),
@@ -36,7 +36,7 @@ VEI = {  # nome: (cor, rugosidade)
     "pneu": ("#2A2D33", 0.95), "roda": ("#D9DDE2", 0.5), "roda_cubo": ("#8E979F", 0.6), "vidro_v": ("#2C4A63", 0.25),
     "plastico_v": ("#33373E", 0.9), "farol_v": ("#FFF6D8", 0.3), "lanterna_v": ("#E5484D", 0.4),
     "placa_v": ("#F7F7F2", 0.6), "placa_faixa": ("#1F4FA3", 0.7), "banco_v": ("#2A2D33", 0.9),
-    "cromo_v": ("#C9CFD6", 0.35), "motor_v": ("#5C646D", 0.6), "bau_v": ("#E5484D", 0.85),
+    "cromo_v": ("#C9CFD6", 0.35), "motor_v": ("#5C646D", 0.6), "bau_v": ("#FF7A1A", 0.85),
     "pisca_v": ("#FF9A2E", 0.4), "gema": ("#FFC928", 0.75), "olho_v": ("#FFFFFF", 0.4), "pupila_v": ("#161A1F", 0.4),
     "chapa": ("#3A414A", 0.55), "piso_borda": ("#1E2329", 0.9),
 }
@@ -73,6 +73,24 @@ def lataria(M, cor):
             M[k] = argila(k, cor, rough=0.45)
         return M[k]
     raise KeyError(cor)
+
+
+def escurecer(nome_mat, M, f=0.62):
+    """Hex da cor de um material de lataria escurecido (pálpebra dos carros)."""
+    base = nome_mat[5:] if nome_mat.startswith("lata_") else nome_mat
+    if base in LATARIA:
+        hx = LATARIA[base]
+    elif len(base) == 6 and all(c in "0123456789abcdefABCDEF" for c in base):
+        hx = "#" + base
+    else:
+        hx = "#888888"
+    r, g, b = (int(hx[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02X%02X%02X" % (int(r * f), int(g * f), int(b * f))
+
+
+def _na_cor(root, m):
+    """Todas as malhas (descendentes de root) que usam o material m: a 'lataria' que o raio-X deixa transparente."""
+    return [o for o in root.children_recursive if o.type == "MESH" and m.name in [x.name for x in o.data.materials if x]]
 
 
 # ================================================================ geometria auxiliar
@@ -123,7 +141,7 @@ def hexagono(name, r, altura, m, raio=None, loc=(0, 0, 0)):
     return o
 
 
-def roda(name, M, r=0.3, largura=0.2, aro=0.58, eixo="y", cor_aro="roda"):
+def roda(name, M, r=0.3, largura=0.2, aro=0.58, cor_aro="roda"):
     """Roda de brinquedo: pneu gordinho (toro achatado) + aro claro com cubo. Eixo de rotação = y."""
     root = empty(name)
     pneu = toro(name + "_pneu", r * 0.72, r * 0.3, M["pneu"], eixo="y", seg=40, seg2=16)
@@ -139,25 +157,59 @@ def roda(name, M, r=0.3, largura=0.2, aro=0.58, eixo="y", cor_aro="roda"):
 
 
 # ================================================================ mascote
-def parafuso(name, M, R=0.1, pose="lanterna", olhar=(0.0, 0.0), sobrancelha=12.0, boca="aberta", luz=False,
-             mira=None):
+def feixe_mat(name="feixe", cor="#FFE9A8", alpha=0.22):
+    """Feixe de luz: brilho que some da lente para a ponta (coordenada 'Generated' z) e nas bordas (Fresnel)."""
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    em = nt.nodes.new("ShaderNodeEmission")
+    em.inputs["Color"].default_value = lin(cor)
+    em.inputs["Strength"].default_value = 1.2
+    tr = nt.nodes.new("ShaderNodeBsdfTransparent")
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(tc.outputs["Generated"], sep.inputs[0])
+    inv = nt.nodes.new("ShaderNodeMath"); inv.operation = "SUBTRACT"; inv.inputs[0].default_value = 1.0
+    nt.links.new(sep.outputs["Z"], inv.inputs[1])
+    pw = nt.nodes.new("ShaderNodeMath"); pw.operation = "POWER"; pw.inputs[1].default_value = 1.8
+    nt.links.new(inv.outputs[0], pw.inputs[0])
+    lw = nt.nodes.new("ShaderNodeLayerWeight"); lw.inputs["Blend"].default_value = 0.5
+    fr = nt.nodes.new("ShaderNodeMath"); fr.operation = "SUBTRACT"; fr.inputs[0].default_value = 1.0
+    nt.links.new(lw.outputs["Facing"], fr.inputs[1])
+    a1 = nt.nodes.new("ShaderNodeMath"); a1.operation = "MULTIPLY"
+    nt.links.new(pw.outputs[0], a1.inputs[0]); nt.links.new(fr.outputs[0], a1.inputs[1])
+    a2 = nt.nodes.new("ShaderNodeMath"); a2.operation = "MULTIPLY"; a2.inputs[1].default_value = alpha
+    nt.links.new(a1.outputs[0], a2.inputs[0])
+    nt.links.new(a2.outputs[0], mix.inputs[0])
+    nt.links.new(tr.outputs[0], mix.inputs[1])
+    nt.links.new(em.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], out.inputs["Surface"])
+    m.blend_method = "BLEND" if hasattr(m, "blend_method") else None
+    return m
+
+
+def parafuso(name, M, R=0.1, pose="lanterna", olhar=(0.0, 0.0), sobrancelha=12.0, boca="sorriso", luz=False,
+             mira=None, inclina=0.0, lanterna=None):
     """Mascote "Parafuso". Olha para -y; origem no chão. R = raio da cabeça sextavada (altura total ≈ 4,2 R).
     pose: 'lanterna' (lanterna erguida na mão direita), 'aponta' (braço esquerdo apontando), 'joinha', 'parado'.
+    lanterna: True = na mão direita, False = guardada no cinto (padrão: na mão só nas poses 'lanterna' e 'aponta').
     boca: 'aberta' | 'sorriso' | 'o' (espanto) | 'reta'. luz=True acende a lanterna (cone de luz).
-    mira: direção (x, y, z) para onde a lanterna aponta, no espaço do mascote (padrão: frente-direita, para baixo).
-    Retorna dict com raiz, cabeca, corpo, braco_e, braco_d, mao_e, mao_d, lanterna."""
+    mira: direção (x, y, z) para onde a lanterna aponta, no espaço do mascote (padrão: para a frente, para baixo e para o lado da mão).
+    inclina: graus que a cabeça tomba para o lado (expressão). Retorna dict com raiz, cabeca, corpo, braco_e, braco_d,
+    mao_e, mao_d (a direita dele, em -x), lanterna, luz (spot, se luz=True), olhos, pupilas, sobrancelhas e
+    bocas (dict tipo→objeto; troque com hide_render)."""
     materiais_veiculos(M)
     root = empty(name)
     P = {"raiz": root}
-    # ---- pernas = haste rosqueada do parafuso + botinas
+    # ---- pernas de aço + botinas
     zq = R * 1.05          # altura do quadril
     for lado in (-1, 1):
         x = lado * R * 0.36
-        perna = child(mt.cyl(f"{name}_perna{lado}", R * 0.2, R * 0.2, zq, (0, 0), M["aco"], seg=20), root, (x, 0, 0))
+        perna = child(mt.cyl(f"{name}_perna{lado}", R * 0.2, R * 0.2, zq, (0, 0), M["aco_escuro"], seg=20), root, (x, 0, 0))
         _liso(perna)
-        for k in range(4):     # filetes de rosca
-            child(toro(f"{name}_rosca{lado}_{k}", R * 0.2, R * 0.045, M["aco_escuro"], eixo="z", seg=20, seg2=8),
-                  root, (x, 0, R * (0.38 + 0.17 * k)))
         child(esfera(f"{name}_bota{lado}", R * 0.3, (x, -R * 0.1, R * 0.14), M["bota"], scale=(0.95, 1.35, 0.62)),
               root)
     # ---- corpo: macacão (barril arredondado) com bolso laranja e alças
@@ -174,16 +226,22 @@ def parafuso(name, M, R=0.1, pose="lanterna", olhar=(0.0, 0.0), sobrancelha=12.0
                      M["gema"], scale=(1, 0.5, 1)), root)
     child(toro(name + "_cinto", R * 0.7, R * 0.05, M["macacao_escuro"], eixo="z", seg=40), root,
           (0, 0, zq + R * 0.02)).scale = (1, 0.9, 1)
-    # ---- arruela (pescoço)
-    za = zc1 - R * 0.08
-    child(disco(name + "_arruela", R * 0.78, R * 0.14, M["aco_escuro"], eixo="z"), root, (0, 0, za))
-    # ---- cabeça sextavada = rosto
-    zh0 = za + R * 0.04
-    hh = R * 1.3
+    # ---- pescoço = toco de haste ROSQUEADA saindo do macacão (o sinal mais forte de "parafuso")
+    zp0 = zc1 - R * 0.12
+    hp = R * 0.42
+    child(_liso(mt.cyl(name + "_haste", R * 0.36, zp0, zp0 + hp, (0, 0), M["aco"], seg=28)), root)
+    for k in range(3):
+        child(toro(f"{name}_rosca{k}", R * 0.36, R * 0.06, M["aco_escuro"], eixo="z", seg=28, seg2=8), root,
+              (0, 0, zp0 + R * 0.12 + k * R * 0.12))
+    # ---- flange (arruela integrada) + cabeça sextavada larga e achatada = rosto
+    zf = zp0 + hp
+    child(disco(name + "_flange", R * 0.94, R * 0.09, M["aco_escuro"], eixo="z"), root, (0, 0, zf + R * 0.045))
+    zh0 = zf + R * 0.08
+    hh = R * 1.2
     cab = child(empty(name + "_cab"), root, (0, 0, zh0))
     P["cabeca"] = cab
-    ch = R * 0.16
-    child(hexagono(name + "_cabeca", R, hh - ch, M["aco"], raio=R * 0.12), cab)
+    ch = R * 0.14
+    child(hexagono(name + "_cabeca", R, hh - ch, M["aco"], raio=R * 0.1), cab)
     # chanfro do topo (cabeça de parafuso de verdade): tronco sextavado que afina
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=R, radius2=R * 0.8, depth=ch,
@@ -193,25 +251,25 @@ def parafuso(name, M, R=0.1, pose="lanterna", olhar=(0.0, 0.0), sobrancelha=12.0
     bv.width = R * 0.05
     bv.segments = 3
     bv.limit_method = "NONE"
-    # topo: fenda Phillips (cruz rebaixada)
+    # topo: fenda Phillips (aparece nos planos de cima)
     for ang in (0, 90):
-        f = child(bloco(f"{name}_fenda{ang}", -R * 0.42, R * 0.42, -R * 0.07, R * 0.07, -R * 0.04, R * 0.04,
+        f = child(bloco(f"{name}_fenda{ang}", -R * 0.4, R * 0.4, -R * 0.065, R * 0.065, -R * 0.04, R * 0.04,
                         M["aco_escuro"], raio=R * 0.03), cab, (0, 0, hh - R * 0.01))
         f.rotation_euler = (0, 0, math.radians(ang + 30))
     ap = R * math.cos(math.radians(30))          # apótema: a face da frente fica em y = -ap
     yr = -ap
 
-    # brilho metálico na quina
-    child(esfera(name + "_brilho", R * 0.09, (-R * 0.62, yr + R * 0.12, hh * 0.86), M["brilho_v"],
-                 scale=(0.5, 0.4, 1.4)), cab)
     # olhos
-    zo = hh * 0.56
-    ro = R * 0.24
+    zo = hh * 0.55
+    ro = R * 0.28
+    P["olhos"], P["pupilas"], P["sobrancelhas"] = [], [], []
     for lado in (-1, 1):
-        c = Vector((lado * R * 0.3, yr - ro * 0.05, zo))
+        c = Vector((lado * R * 0.33, yr - ro * 0.05, zo))
         olho = child(esfera(f"{name}_olho{lado}", ro, tuple(c), M["olho_p"], scale=(0.9, 0.5, 1.1)), cab)
         pp = Vector((olhar[0] * ro * 0.35 - lado * ro * 0.06, -ro * 0.36, olhar[1] * ro * 0.35 - ro * 0.04))
         pup = child(esfera(f"{name}_pupila{lado}", ro * 0.6, tuple(pp), M["pupila_p"], scale=(1, 0.45, 1.1)), olho)
+        P["olhos"].append(olho)
+        P["pupilas"].append(pup)
         child(esfera(f"{name}_luz{lado}", ro * 0.2, (ro * 0.2, -ro * 0.24, ro * 0.28), M["brilho_v"],
                      scale=(1, 0.5, 1)), pup)
         # sobrancelha grossa (de mecânico). sobrancelha > 0: a direita sobe e abre (curioso);
@@ -223,27 +281,35 @@ def parafuso(name, M, R=0.1, pose="lanterna", olhar=(0.0, 0.0), sobrancelha=12.0
             th = -sobrancelha * lado      # ponta de dentro mais alta
             dz = ro * 0.12
         sb = child(bloco(f"{name}_sobr{lado}", -ro * 0.75, ro * 0.75, -ro * 0.1, ro * 0.1, -ro * 0.14, ro * 0.14,
-                         M["sobr_p"], raio=ro * 0.12), cab, (lado * R * 0.32, yr - ro * 0.08, zo + ro * 1.45 + dz))
+                         M["sobr_p"], raio=ro * 0.12), cab, (lado * R * 0.33, yr - ro * 0.08, zo + ro * 1.32 + dz))
         sb.rotation_euler = (0, math.radians(th), 0)
+        P["sobrancelhas"].append(sb)
         # bochecha
-        child(esfera(f"{name}_boch{lado}", R * 0.1, (lado * R * 0.55, yr - R * 0.01, hh * 0.3), M["bochecha_p"],
+        child(esfera(f"{name}_boch{lado}", R * 0.1, (lado * R * 0.64, yr - R * 0.01, hh * 0.3), M["bochecha_p"],
                      scale=(1.1, 0.3, 0.7)), cab)
     # boca
-    bc = (0, yr - R * 0.01, hh * 0.24)
-    if boca == "aberta":
-        child(esfera(name + "_boca", R * 0.17, bc, M["boca_p"], scale=(1.0, 0.35, 0.72)), cab)
-        child(esfera(name + "_lingua", R * 0.075, (0, bc[1] - R * 0.025, bc[2] - R * 0.045), M["lingua_p"],
-                     scale=(1.2, 0.4, 0.6)), cab)
-    elif boca == "o":
-        child(esfera(name + "_boca", R * 0.1, bc, M["boca_p"], scale=(0.85, 0.35, 1.1)), cab)
-    elif boca == "reta":
-        child(capsula(name + "_boca", R * 0.025, R * 0.22, M["boca_p"]), cab,
-              (R * 0.11, bc[1], bc[2])).rotation_euler = (0, math.radians(90), 0)
-    else:
-        child(_arco(name + "_sorriso", R * 0.15, R * 0.028, M["boca_p"], ang=math.pi * 0.85), cab, bc)
+    bc = (0, yr - R * 0.01, hh * 0.16)
+    # todas as bocas são montadas; só a pedida aparece (P["bocas"][tipo] para trocar na animação: hide_render)
+    B = {}
+    B["aberta"] = child(empty(name + "_boca_aberta"), cab, bc)       # boca larga em "D", não oval no meio da cara
+    child(esfera(name + "_boca", R * 0.16, (0, 0, 0), M["boca_p"], scale=(1.5, 0.35, 0.6)), B["aberta"])
+    child(esfera(name + "_lingua", R * 0.08, (0, -R * 0.025, -R * 0.04), M["lingua_p"], scale=(1.4, 0.4, 0.5)),
+          B["aberta"])
+    child(bloco(name + "_dentes", -R * 0.17, R * 0.17, -R * 0.02, R * 0.02, -R * 0.025, R * 0.025, M["olho_p"],
+                raio=R * 0.015), B["aberta"], (0, -R * 0.03, R * 0.06))
+    B["o"] = child(esfera(name + "_boca_o", R * 0.09, bc, M["boca_p"], scale=(0.8, 0.35, 1.05)), cab)
+    B["reta"] = child(capsula(name + "_boca_reta", R * 0.025, R * 0.22, M["boca_p"]), cab, (R * 0.11, bc[1], bc[2]))
+    B["reta"].rotation_euler = (0, math.radians(90), 0)
+    B["sorriso"] = child(_arco(name + "_boca_sorriso", R * 0.19, R * 0.035, M["boca_p"], ang=math.pi * 0.8), cab,
+                         (0, bc[1], bc[2] + R * 0.12))
+    for k, o in B.items():
+        if k != boca:
+            for x in [o] + list(o.children_recursive):
+                x.hide_render = x.hide_viewport = True
+    P["bocas"] = B
     # ---- braços (macacão) + luvas laranja
     zb = zc1 - R * 0.35
-    for lado, nome in ((-1, "e"), (1, "d")):
+    for lado, nome in ((1, "e"), (-1, "d")):          # olhando para -y, a mão DIREITA dele fica em -x
         ombro = child(empty(f"{name}_ombro_{nome}"), root, (lado * R * 0.66, 0, zb))
         child(capsula(f"{name}_braco_{nome}", R * 0.13, R * 0.5, M["macacao"]), ombro)
         mao = child(esfera(f"{name}_mao_{nome}", R * 0.18, (0, 0, -R * 0.6), M["luva"]), ombro)
@@ -264,30 +330,48 @@ def parafuso(name, M, R=0.1, pose="lanterna", olhar=(0.0, 0.0), sobrancelha=12.0
           (0, -R * 0.265, 0))
     if luz:
         bm = bmesh.new()
-        L = R * 3.0
-        bmesh.ops.create_cone(bm, cap_ends=False, segments=24, radius1=R * 0.17, radius2=R * 1.1, depth=L,
+        L = R * 3.2
+        bmesh.ops.create_cone(bm, cap_ends=False, segments=32, radius1=R * 0.17, radius2=R * 1.2, depth=L,
                               matrix=Matrix.Translation((0, 0, L / 2)))
         if "feixe" not in M:
-            M["feixe"] = mat("feixe", "#FFE9A8", rough=0.5, alpha=0.16, emit=0.8)
+            M["feixe"] = feixe_mat()
         fx = child(_liso(mesh_obj(name + "_feixe", bm, M["feixe"])), lr, (0, -R * 0.27, 0))
         fx.rotation_euler = (math.radians(90), 0, 0)
+        sd = bpy.data.lights.new(name + "_spot", "SPOT")
+        sd.energy = 60 * (R / 0.15) ** 2
+        sd.color = lin("#FFE2A0")[:3]
+        sd.spot_size = math.radians(40)
+        sd.spot_blend = 0.6
+        sd.shadow_soft_size = R * 0.1
+        sp = child(mt.link(bpy.data.objects.new(name + "_spot", sd)), lr, (0, -R * 0.3, 0))
+        sp.rotation_euler = (math.radians(90), 0, 0)      # spot aponta para -z local → -y da lanterna
+        P["luz"] = sp
     P["lanterna"] = lr
     # ---- poses
     if pose in ("lanterna", "aponta"):
-        P["braco_d"].rotation_euler = (math.radians(-25), math.radians(-128), 0)
+        P["braco_d"].rotation_euler = (math.radians(-25), math.radians(128), 0)
     if pose == "aponta":
-        P["braco_e"].rotation_euler = (math.radians(-25), math.radians(105), 0)
+        P["braco_e"].rotation_euler = (math.radians(-25), math.radians(-105), 0)
     if pose == "joinha":
-        P["braco_e"].rotation_euler = (math.radians(-60), math.radians(40), 0)
-        dedo = child(capsula(name + "_polegar", R * 0.07, R * 0.16, M["luva"]), P["mao_e"], (0, -R * 0.02, R * 0.12))
+        P["braco_e"].rotation_euler = (math.radians(-70), math.radians(-35), 0)
+        dedo = child(capsula(name + "_polegar", R * 0.085, R * 0.2, M["luva"]), P["mao_e"], (0, -R * 0.03, R * 0.14))
         dedo.rotation_euler = (math.radians(180), 0, 0)
-    # lanterna na mão direita, apontando para a frente/para baixo (o que ela "examina")
+    cab.rotation_euler = (0, math.radians(inclina), 0)
+    # lanterna: na mão direita, apontando para o que ela "examina", ou guardada no cinto
+    if lanterna is None:
+        lanterna = pose in ("lanterna", "aponta")
     bpy.context.view_layer.update()
-    mao = P["mao_d"]
-    alvo = Vector(mira) if mira else Vector((0.45, -1.0, -0.55))
-    q = alvo.normalized().to_track_quat("-Y", "Z")
-    lr.parent = mao
-    lr.matrix_world = Matrix.Translation(mao.matrix_world.translation) @ q.to_matrix().to_4x4()
+    if lanterna:
+        mao = P["mao_d"]
+        alvo = Vector(mira) if mira else Vector((-0.45, -1.0, -0.55))
+        lr.parent = mao
+        lr.matrix_world = (Matrix.Translation(mao.matrix_world.translation)
+                           @ alvo.normalized().to_track_quat("-Y", "Z").to_matrix().to_4x4())
+    else:
+        lr.parent = root
+        lr.matrix_world = (Matrix.Translation((-R * 0.66, -R * 0.2, zq + R * 0.05))
+                           @ Vector((0, 0, -1)).to_track_quat("-Y", "Z").to_matrix().to_4x4()
+                           @ Matrix.Scale(0.8, 4))
     return P
 
 
@@ -320,9 +404,10 @@ def placa_mercosul(name, M, largura=0.36, proporcao=0.33):
 # cabine; r: raio da roda; ee: entre-eixos; cab: (x base traseira, x teto traseiro, x teto dianteiro, x base do
 # para-brisa); capo: queda do capô.
 TIPOS_CARRO = {
-    "hatch": dict(c=2.0, l=1.1, z0=0.2, hb=0.46, hc=0.42, r=0.29, ee=1.3, cab=(-0.96, -0.86, 0.12, 0.52), capo=0.07),
-    "popular": dict(c=1.72, l=1.06, z0=0.2, hb=0.46, hc=0.48, r=0.28, ee=1.1, cab=(-0.83, -0.76, 0.1, 0.42), capo=0.06),
-    "suv": dict(c=2.1, l=1.16, z0=0.28, hb=0.52, hc=0.44, r=0.33, ee=1.34, cab=(-1.0, -0.94, 0.16, 0.52), capo=0.05),
+    "hatch": dict(c=2.0, l=1.1, z0=0.19, hb=0.44, hc=0.38, r=0.26, ee=1.3, cab=(-0.96, -0.66, 0.1, 0.5), capo=0.07),
+    "popular": dict(c=1.68, l=1.04, z0=0.19, hb=0.44, hc=0.44, r=0.25, ee=1.08, cab=(-0.82, -0.62, 0.08, 0.4),
+                    capo=0.06),
+    "suv": dict(c=2.12, l=1.16, z0=0.3, hb=0.5, hc=0.42, r=0.3, ee=1.36, cab=(-1.0, -0.8, 0.14, 0.5), capo=0.05),
     "picape": dict(c=2.42, l=1.12, z0=0.24, hb=0.48, hc=0.44, r=0.31, ee=1.56, cab=(-0.42, -0.38, 0.3, 0.7),
                    capo=0.06),
     "seda": dict(c=2.3, l=1.1, z0=0.2, hb=0.46, hc=0.42, r=0.29, ee=1.42, cab=(-0.72, -0.5, 0.16, 0.56), capo=0.07),
@@ -343,29 +428,31 @@ def _vidro(name, a, b, meia_l, m, fora=1, esp=0.014, raio=0.025):
     return casca(name, perfil, -meia_l, meia_l, m, raio=raio, seg=3)
 
 
-def carro_chibi(name, M, tipo="hatch", cor="vermelho", rosto=False, olhar=(0.0, 0.0), humor="feliz", placa=True):
+def carro_chibi(name, M, tipo="hatch", cor="prata", rosto=False, olhar=(0.0, 0.0), humor="feliz", placa=True,
+                escala=1.0):
     """Carrinho de brinquedo. Anda para +x. tipo: 'hatch' | 'popular' (hatch de entrada) | 'suv' | 'picape' | 'seda'.
     rosto=True põe olhos nos faróis e boca na grade (planos de 'sentimento'); humor: 'feliz' | 'cansado' | 'susto'.
-    Retorna dict com raiz, corpo e lataria (para trocar material no raio-X), rodas (raízes, giram em y), farois."""
+    escala: tamanho (1 = carro de ~2 m de comprimento). Retorna dict com raiz, corpo, lataria (todas as peças na cor,
+    para o raio-X), rodas (raízes, giram em y), farois, rosto (todas as peças do rosto, para ligar/desligar),
+    olhos, pupilas, bocas (dict humor→objeto)."""
     materiais_veiculos(M)
     T = TIPOS_CARRO[tipo]
     m = lataria(M, cor)
     C, Lg, z0, hb, hc, r, ee, capo = T["c"], T["l"], T["z0"], T["hb"], T["hc"], T["r"], T["ee"], T["capo"]
     cr0, cr1, cf1, cf0 = T["cab"]
     root = empty(name)
-    V = {"raiz": root, "rodas": [], "farois": [], "lataria": []}
+    V = {"raiz": root, "rodas": [], "farois": [], "rosto": [], "olhos": [], "pupilas": []}
     x0, x1 = -C / 2, C / 2
     zt = z0 + hb
+    m_palp = lataria(M, escurecer(m.name, M))
     zt2 = zt + hc
     # ---- caixa de baixo: capô cai para a frente; porta-malas do sedã desce um pouco
     perfil = [(x0, z0 + 0.03), (x1, z0 + 0.03), (x1, zt - capo - 0.05), (x1 - 0.14, zt - capo), (cf0, zt), (x0, zt)]
     base = child(casca(name + "_base", perfil, -Lg / 2, Lg / 2, m, raio=0.13, seg=5), root)
-    V["lataria"].append(base)
     # ---- cabine na cor da lataria
     lc = Lg * 0.9
     cab = child(casca(name + "_cabine", [(cr0, zt - 0.04), (cf0, zt - 0.04), (cf1, zt2), (cr1, zt2)], -lc / 2, lc / 2,
                       m, raio=0.09, seg=4), root)
-    V["lataria"].append(cab)
 
     def xb(t, frente):        # x da borda da cabine na altura relativa t (0 = linha dos vidros, 1 = teto)
         return (cf0 + (cf1 - cf0) * t) if frente else (cr0 + (cr1 - cr0) * t)
@@ -447,14 +534,19 @@ def carro_chibi(name, M, tipo="hatch", cor="vermelho", rosto=False, olhar=(0.0, 
             child(bloco(f"{name}_maca{s}{xm_:.2f}", -0.045, 0.045, -0.01, 0.01, -0.012, 0.012, M["plastico_v"],
                         raio=0.008), root, (xm_, s * (Lg / 2 + 0.003), zt - 0.09))
     if rosto:
-        if humor == "feliz":
-            child(_arco(name + "_boca", 0.11, 0.019, M["boca_p"], ang=math.pi * 0.8), root,
-                  (x1 + 0.045, 0, zg + 0.035)).rotation_euler = (0, 0, math.radians(90))
-        elif humor == "susto":
-            child(esfera(name + "_boca", 0.055, (x1 + 0.04, 0, zg), M["boca_p"], scale=(0.3, 0.8, 1.0)), root)
-        else:
-            child(_arco(name + "_boca", 0.09, 0.017, M["boca_p"], ang=math.pi * 0.6, para_cima=False), root,
-                  (x1 + 0.045, 0, zg - 0.05)).rotation_euler = (0, 0, math.radians(90))
+        B = {"feliz": child(_arco(name + "_boca_feliz", 0.12, 0.022, M["boca_p"], ang=math.pi * 0.8), root,
+                            (x1 + 0.045, 0, zg + 0.04)),
+             "susto": child(esfera(name + "_boca_susto", 0.06, (x1 + 0.04, 0, zg), M["boca_p"], scale=(0.3, 0.8, 1.0)),
+                            root),
+             "cansado": child(_arco(name + "_boca_cansado", 0.1, 0.02, M["boca_p"], ang=math.pi * 0.6, para_cima=False),
+                              root, (x1 + 0.045, 0, zg - 0.055))}
+        for k, o in B.items():
+            if k != "susto":
+                o.rotation_euler = (0, 0, math.radians(90))
+            if k != humor:
+                o.hide_render = o.hide_viewport = True
+        V["bocas"] = B
+        V["rosto"] += list(B.values())
     if placa:
         child(placa_mercosul(name + "_placa_f", M, largura=0.3), root, (x1 + 0.07, 0, zpc))
         pt = child(placa_mercosul(name + "_placa_t", M, largura=0.3), root, (x0 - 0.012, 0, zt - hb * 0.45))
@@ -473,6 +565,8 @@ def carro_chibi(name, M, tipo="hatch", cor="vermelho", rosto=False, olhar=(0.0, 
             child(rd, root, (wx, s * (Lg / 2 - 0.045), r))
             V["rodas"].append(rd)
     V["corpo"] = base
+    V["lataria"] = _na_cor(root, m)
+    root.scale = (escala, escala, escala)
     return V
 
 
@@ -480,13 +574,14 @@ def carro_chibi(name, M, tipo="hatch", cor="vermelho", rosto=False, olhar=(0.0, 
 def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
     """Motinho de brinquedo. Anda para +x. tipo: 'street' (a 150/160 de todo dia) | 'cub' (motoneta 110/125) |
     'trail' (160 aventureira). bau=True: baú de entregador no bagageiro. O lado do escapamento é o -y (o que a câmera
-    em -y vê); a corrente fica do lado +y. Retorna dict com raiz, rodas, tanque, farois, corrente (empty)."""
+    em -y vê); a corrente fica do lado +y. Retorna dict com raiz, rodas, tanque, farois, lataria (peças na cor),
+    corrente (empty no meio da transmissão; None na motoneta), olhos/pupilas (se rosto)."""
     materiais_veiculos(M)
     m = lataria(M, cor)
     root = empty(name)
-    V = {"raiz": root, "rodas": [], "farois": []}
+    V = {"raiz": root, "rodas": [], "farois": [], "corrente": None, "olhos": [], "pupilas": []}
     trail, cub = tipo == "trail", tipo == "cub"
-    r = {"street": 0.26, "cub": 0.22, "trail": 0.3}[tipo]
+    r = {"street": 0.24, "cub": 0.2, "trail": 0.27}[tipo]
     ee = {"street": 1.0, "cub": 0.9, "trail": 1.06}[tipo]
     xt, xd = -ee / 2, ee / 2
     zr = r
@@ -517,6 +612,9 @@ def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
         for k in range(3):
             gx = x0_ + (x1_ - x0_) * k / 2
             child(mt.tube(f"{name}_grelha_t{k}", (gx, -0.085, z_), (gx, 0.085, z_), 0.012, M["plastico_v"], seg=8), root)
+        for s in (-1, 1):   # suportes até a carenagem (a grelha não flutua)
+            child(mt.tube(f"{name}_grelha_s{s}", (x0_ + 0.02, s * 0.085, z_), (x0_ + 0.1, s * 0.085, z_ - 0.13), 0.011,
+                          M["plastico_v"], seg=8), root)
 
     if cub:
         # motoneta: carenagem traseira inteira na cor, túnel baixo, escudo das pernas, farol no guidão
@@ -534,7 +632,7 @@ def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
         child(bloco(name + "_motor", -0.12, 0.12, -0.09, 0.09, -0.08, 0.08, M["motor_v"], raio=0.05), root,
               (-0.04, 0, zr - 0.04))
         child(capsula(name + "_escape", 0.04, 0.42, M["cromo_v"]), root, (0.05, -0.12, zr - 0.06)).rotation_euler = (
-            0, math.radians(-96), 0)
+            0, math.radians(96), 0)
         # carenagem do guidão com o farol
         child(esfera(name + "_carenagem", 0.12, (xg - 0.02, 0, zg + 0.0), m, scale=(0.9, 1.25, 0.6)), root)
         V["farois"].append(child(esfera(name + "_farol", 0.07, (xg + 0.085, 0, zg - 0.0), M["farol_v"],
@@ -559,21 +657,21 @@ def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
         # quadro (tubo do pescoço ao motor)
         child(mt.tube(name + "_quadro", (xg - 0.02, 0, zg - 0.12), (0.12, 0, zr + 0.2), 0.035, M["plastico_v"]), root)
         # tanque em gota, estreito na traseira
-        tq = child(esfera(name + "_tanque", 0.19, (0.1, 0, zt - 0.06), m, scale=(1.3, 0.78, 0.62)), root)
+        tq = child(esfera(name + "_tanque", 0.21, (0.1, 0, zt - 0.07), m, scale=(1.35, 0.84, 0.66)), root)
         tq.rotation_euler = (0, math.radians(8), 0)
         V["tanque"] = tq
         for s in (-1, 1):   # faixa de fábrica genérica
             child(esfera(f"{name}_tq_faixa{s}", 0.09, (0.12, s * 0.143, zt - 0.08), M["placa_v"],
                          scale=(1.25, 0.1, 0.22)), root).rotation_euler = (0, math.radians(-10), 0)
         child(esfera(name + "_tq_brilho", 0.025, (0.05, -0.1, zt + 0.03), M["brilho_v"], scale=(2.4, 0.5, 0.6)), root)
-        # tampa lateral (debaixo do banco)
-        child(esfera(name + "_tampa_lat", 0.12, (-0.2, 0, zt - 0.12), m, scale=(1.0, 0.72, 0.75)), root)
+        # tampa lateral + rabeta numa peça só (debaixo do banco até a traseira)
+        child(casca(name + "_lateral", [(-0.02, zt - 0.22), (0.02, zt - 0.06), (xt - 0.22, zt - 0.03),
+                                        (xt - 0.14, zt - 0.13)], -0.11, 0.11, m, raio=0.05, seg=4), root)
         # banco reto de dois lugares
         xb0, xb1 = (xt - 0.02, 0.0) if not trail else (xt - 0.04, 0.04)
         child(casca(name + "_banco", [(xb0, zt - 0.06), (xb1, zt - 0.06), (xb1 - 0.03, zt + 0.04), (xb0 + 0.02, zt + 0.03)],
                     -0.115, 0.115, M["banco_v"], raio=0.04, seg=3), root)
-        # rabeta + lanterna + placa quase quadrada
-        child(esfera(name + "_rabeta", 0.11, (xt - 0.04, 0, zt - 0.07), m, scale=(1.5, 0.7, 0.5)), root)
+        # lanterna + placa quase quadrada
         child(esfera(name + "_lant_tras", 0.04, (xt - 0.19, 0, zt - 0.07), M["lanterna_v"], scale=(0.6, 1.3, 0.8)), root)
         for s in (-1, 1):
             child(esfera(f"{name}_pisca_t{s}", 0.022, (xt - 0.16, s * 0.1, zt - 0.1), M["pisca_v"]), root)
@@ -595,9 +693,9 @@ def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
         # escapamento cromado do lado da câmera
         child(mt.tube(name + "_escape_c", (0.1, -0.1, zr - 0.05), (-0.12, -0.13, zr - 0.03), 0.035, M["cromo_v"]), root)
         child(capsula(name + "_escape", 0.055, 0.34, M["cromo_v"]), root, (-0.1, -0.14, zr - 0.02)).rotation_euler = (
-            0, math.radians(-100), 0)
+            0, math.radians(100), 0)
         child(capsula(name + "_escape_prot", 0.045, 0.2, M["plastico_v"]), root,
-              (-0.14, -0.175, zr + 0.0)).rotation_euler = (0, math.radians(-100), 0)
+              (-0.14, -0.18, zr + 0.0)).rotation_euler = (0, math.radians(100), 0)
         # carenagem do farol + farol redondo + piscas
         child(esfera(name + "_carenagem", 0.12, (xg + 0.02, 0, zg - 0.1), m, scale=(0.8, 1.05, 0.95)), root)
         V["farois"].append(child(esfera(name + "_farol", 0.085, (xg + 0.105, 0, zg - 0.1), M["farol_v"],
@@ -608,7 +706,7 @@ def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
             # para-lama alto + bico + tampas laterais "de número"
             child(esfera(name + "_paralama", 0.2, (xd + 0.03, 0, zr + r + 0.1), m, scale=(1.2, 0.4, 0.16)),
                   root).rotation_euler = (0, math.radians(8), 0)
-            child(esfera(name + "_bico", 0.13, (xg + 0.12, 0, zg - 0.22), m, scale=(1.2, 0.55, 0.3)), root
+            child(esfera(name + "_bico", 0.13, (xg + 0.1, 0, zg - 0.2), m, scale=(1.25, 0.5, 0.2)), root
                   ).rotation_euler = (0, math.radians(22), 0)
         else:
             child(esfera(name + "_paralama", 0.16, (xd + 0.02, 0, zr + r + 0.03), M["plastico_v"],
@@ -623,21 +721,25 @@ def moto_chibi(name, M, tipo="street", cor="vermelho", bau=False, rosto=False):
         f = V["farois"][0]
         for s in (-1, 1):
             ol = child(esfera(f"{name}_olho{s}", 0.04, (0.012, s * 0.035, 0.012), M["olho_v"], scale=(0.4, 0.9, 1.1)), f)
-            child(esfera(f"{name}_pupila{s}", 0.024, (0.012, -s * 0.003, 0), M["pupila_v"], scale=(0.4, 1, 1.1)), ol)
+            V["olhos"].append(ol)
+            V["pupilas"].append(child(esfera(f"{name}_pupila{s}", 0.024, (0.012, -s * 0.003, 0), M["pupila_v"],
+                                             scale=(0.4, 1, 1.1)), ol))
     if bau:
         zb = zgr + 0.02
+        # baú laranja-segurança com tampa grafite (nada de vermelho + amarelo de app de entrega)
         child(bloco(name + "_bau", -0.16, 0.16, -0.16, 0.16, 0, 0.3, M["bau_v"], raio=0.04), root,
               (xt - 0.09, 0, zb + 0.15))
         child(bloco(name + "_bau_tampa", -0.17, 0.17, -0.17, 0.17, -0.018, 0.018, M["plastico_v"], raio=0.018), root,
               (xt - 0.09, 0, zb + 0.31))
         for s in (-1, 1):   # faixa refletiva
-            child(bloco(f"{name}_bau_faixa{s}", -0.13, 0.13, -0.004, 0.004, -0.02, 0.02, M["gema"], raio=0.006), root,
+            child(bloco(f"{name}_bau_faixa{s}", -0.13, 0.13, -0.004, 0.004, -0.02, 0.02, M["cromo_v"], raio=0.006), root,
                   (xt - 0.09, s * 0.163, zb + 0.08))
+    V["lataria"] = _na_cor(root, m)
     return V
 
 
 # ================================================================ palco
-def chapa_xadrez_mat(name="chapa_xadrez", base="#2B3138", ressalto="#4A535E", passo=0.09):
+def chapa_xadrez_mat(name="chapa_xadrez", base="#2B3138", ressalto="#566170", passo=0.09):
     """Chapa xadrez (antiderrapante de oficina): grãos alongados em duas direções alternadas, com relevo (Bump)."""
     m = bpy.data.materials.new(name)
     m.use_nodes = True
@@ -693,7 +795,7 @@ def chapa_xadrez_mat(name="chapa_xadrez", base="#2B3138", ressalto="#4A535E", pa
 
 
 def fundo_brilho_mat(name="fundo_oficina", topo="#14181D", meio="#262C34", brilho="#FF7A1A", z_brilho=0.0,
-                     largura=0.7, forca=0.07):
+                     largura=0.4, forca=0.12):
     """Parede grafite em cor chapada (emissão) com uma faixa de brilho laranja suave na altura z_brilho."""
     m = bpy.data.materials.new(name)
     m.use_nodes = True
@@ -735,20 +837,21 @@ def fundo_brilho_mat(name="fundo_oficina", topo="#14181D", meio="#262C34", brilh
 
 def palco_oficina(name, M, largura=14.0, fundo_y=3.0, profundidade=8.0, altura=8.0, passo=0.09, z_brilho=0.25):
     """Piso de chapa xadrez (z=0, de y=-profundidade/2 até fundo_y) + parede grafite com brilho laranja."""
-    if "chapa_xadrez" not in M:
-        M["chapa_xadrez"] = chapa_xadrez_mat(passo=passo)
-    if "fundo_oficina" not in M:
-        M["fundo_oficina"] = fundo_brilho_mat(z_brilho=z_brilho)
+    kc, kf = f"chapa_xadrez_{passo}", f"fundo_oficina_{z_brilho}"     # cache por parâmetro
+    if kc not in M:
+        M[kc] = chapa_xadrez_mat(kc, passo=passo)
+    if kf not in M:
+        M[kf] = fundo_brilho_mat(kf, z_brilho=z_brilho)
     root = empty(name)
     bm = bmesh.new()
     y0 = -profundidade / 2
     vs = [bm.verts.new(v) for v in ((-largura / 2, y0, 0), (largura / 2, y0, 0), (largura / 2, fundo_y, 0),
                                     (-largura / 2, fundo_y, 0))]
     bm.faces.new(vs)
-    child(mesh_obj(name + "_piso", bm, M["chapa_xadrez"]), root)
+    child(mesh_obj(name + "_piso", bm, M[kc]), root)
     bm = bmesh.new()
     vs = [bm.verts.new(v) for v in ((-largura / 2, 0, 0), (largura / 2, 0, 0), (largura / 2, 0, altura),
                                     (-largura / 2, 0, altura))]
     bm.faces.new(vs)
-    child(mesh_obj(name + "_fundo", bm, M["fundo_oficina"]), root, (0, fundo_y, 0))
+    child(mesh_obj(name + "_fundo", bm, M[kf]), root, (0, fundo_y, 0))
     return root
