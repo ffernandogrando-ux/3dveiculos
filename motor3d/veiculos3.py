@@ -687,10 +687,12 @@ def carro(name, M, tipo="hatch", cor="prata", rosto=False, humor="feliz", olhar=
             loc, nor = sup.raio((xb, sy * 5, belt + 0.07), (0, -sy, 0))
             if loc is None:
                 continue
-            ponta = loc + Vector((-0.02, sy * 0.10, 0.025))
-            hs = tubo(f"{name}_haste_retro{sy}", [loc - nor * 0.01, ponta], 0.016, lat, suave=False)
-            cx = caixa(f"{name}_retrovisor{sy}", ponta + Vector((-0.01, sy * 0.025, 0.0)), (0.06, 0.07, 0.065),
-                       lat, raio=0.45)
+            # haste curta e grossa + "orelha" larga: lê como retrovisor, não como antena
+            ponta = loc + Vector((-0.01, sy * 0.06, 0.03))
+            hs = tubo(f"{name}_haste_retro{sy}", [loc - nor * 0.02, ponta], 0.026, lat, suave=False)
+            cx = caixa(f"{name}_retrovisor{sy}", ponta + Vector((-0.015, sy * 0.06, 0.03)), (0.065, 0.15, 0.11),
+                       lat, raio=0.3)
+            cx.rotation_euler = (0, 0, math.radians(-12) * sy)
             ornam += [hs, cx]
     # piscas
     for sy in (1, -1):
@@ -743,10 +745,10 @@ def _rosto_carro(name, M, sup, s, humor, olhar, lat):
     ro = 0.19
     for sy in (1, -1):
         e = vazio(f"{name}_olho{sy}")
-        loc, nor = sup.raio((5, sy * W * 0.50, belt - 0.05), (-1, 0, 0))
+        loc, nor = sup.raio((5, sy * W * 0.50, belt - 0.10), (-1, 0, 0))
         e.location = loc - nor * 0.05
         _orientar(e, nor)
-        bola = elipsoide(f"{name}_olho{sy}_branco", (0, 0, 0), (0.085, ro * 0.95, ro), M["olho"])
+        bola = elipsoide(f"{name}_olho{sy}_branco", (0, 0, 0), (0.085, ro * 0.95, ro * 0.92), M["olho"])
         filho(bola, e)
         ox, oz = olhar
         pr = 0.085 if humor != "assustado" else 0.055
@@ -824,8 +826,8 @@ MOTOS = {
     "cub": dict(R=0.24, larg=0.155, xr=-0.46, xf=0.54, zc=0.24,
                 est=[(-0.70, 0.09, 0.58, 0.67), (-0.62, 0.13, 0.55, 0.73), (-0.44, 0.16, 0.54, 0.75),
                      (-0.28, 0.16, 0.48, 0.74), (-0.16, 0.16, 0.32, 0.57), (-0.06, 0.17, 0.27, 0.42),
-                     (0.03, 0.18, 0.27, 0.44), (0.10, 0.24, 0.28, 0.62), (0.17, 0.27, 0.29, 0.86),
-                     (0.27, 0.27, 0.33, 0.95), (0.34, 0.20, 0.40, 0.97)],
+                     (0.04, 0.19, 0.27, 0.45), (0.12, 0.26, 0.28, 0.62), (0.20, 0.30, 0.30, 0.88),
+                     (0.28, 0.29, 0.34, 0.96), (0.33, 0.22, 0.40, 0.97)],
                 banco=(-0.60, -0.16), cabeca=(0.37, 0.98)),
 }
 
