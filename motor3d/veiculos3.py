@@ -21,11 +21,12 @@ from mathutils import Vector, Matrix, Quaternion
 from mathutils.bvhtree import BVHTree
 
 # ================================================================ cores
-LATARIA = {"branco": "#F2F1EC", "prata": "#C4C9CF", "cinza": "#868D95", "preto": "#3A3F47",
-           "vermelho": "#D93A3E", "azul": "#2F6FB3", "laranja": "#FF7A1A", "amarelo": "#FFC928"}
+LATARIA = {"branco": "#F4F4F0", "prata": "#C4C9CF", "cinza": "#868D95", "preto": "#3A3F47",   # cores vivas (aprovadas)
+           "vermelho": "#FF2E3B", "azul": "#1E5BFF", "laranja": "#FF6A00", "amarelo": "#FFC400",
+           "verde": "#00B37A", "roxo": "#7A3CFF"}
 
 BASE = {  # nome: (cor, rugosidade, coat, emissão, metálico)
-    "vidro": ("#2A4157", 0.08, 0.3, 0.0, 0.0),
+    "vidro": ("#28405A", 0.1, 0.15, 0.0, 0.0),
     "plastico": ("#33373E", 0.55, 0.1, 0.0, 0.0),
     "grade": ("#2A2E34", 0.6, 0.0, 0.0, 0.0),
     "pneu": ("#2B2E33", 0.7, 0.05, 0.0, 0.0),
@@ -45,7 +46,7 @@ BASE = {  # nome: (cor, rugosidade, coat, emissão, metálico)
     "motor": ("#6E767F", 0.45, 0.1, 0.0, 0.3),
     "banco": ("#2E3238", 0.6, 0.05, 0.0, 0.0),
     "refletivo": ("#EEF2F6", 0.2, 0.4, 0.15, 0.0),
-    "bau": ("#FF7A1A", 0.4, 0.3, 0.0, 0.0),
+    "bau": ("#FF6A00", 0.4, 0.3, 0.0, 0.0),
 }
 
 
@@ -67,7 +68,7 @@ def vinil(name, hexcol, rough=0.4, coat=0.25, emit=0.0, metal=0.0):
         if k in b.inputs:
             b.inputs[k].default_value = v
     if name.endswith("vidro") and "Specular IOR Level" in b.inputs:
-        b.inputs["Specular IOR Level"].default_value = 0.3
+        b.inputs["Specular IOR Level"].default_value = 0.15
     if emit:
         b.inputs["Emission Color"].default_value = lin(hexcol)
         b.inputs["Emission Strength"].default_value = emit
@@ -632,8 +633,9 @@ def carro(name, M, tipo="hatch", cor="prata", rosto=False, humor="feliz", olhar=
             f = elipsoide(f"{name}_farol{sy}", (0, 0, 0), (0.03, 0.10, 0.055), M["farol"])
             colar(f, sup, (5, sy * W * 0.64, zf), (-1, 0, 0), embute=0.008)
             ornam.append(f)
-        g = caixa(f"{name}_grade", (0, 0, 0), (0.05, W * 0.62, 0.075), M["grade"], raio=0.45)
-        colar(g, sup, (5, 0, (s["zb"] + 0.24 + belt) / 2 - 0.01), (-1, 0, 0), embute=0.018)
+        # grade larga logo acima do para-choque (lê como grade, não como boca)
+        g = caixa(f"{name}_grade", (0, 0, 0), (0.05, W * 0.92, 0.07), M["grade"], raio=0.4)
+        colar(g, sup, (5, 0, s["zb"] + 0.24 + 0.05), (-1, 0, 0), embute=0.02)
         ornam.append(g)
     # piscas
     for sy in (1, -1):
@@ -765,9 +767,9 @@ MOTOS = {
                   banco=(-0.64, 0.02), cabeca=(0.42, 1.10)),
     "cub": dict(R=0.24, larg=0.155, xr=-0.46, xf=0.54, zc=0.24,
                 est=[(-0.70, 0.08, 0.58, 0.67), (-0.62, 0.12, 0.55, 0.73), (-0.44, 0.15, 0.54, 0.75),
-                     (-0.28, 0.15, 0.48, 0.74), (-0.15, 0.12, 0.33, 0.60), (-0.04, 0.10, 0.28, 0.42),
-                     (0.08, 0.10, 0.28, 0.42), (0.16, 0.17, 0.29, 0.62), (0.21, 0.20, 0.31, 0.86),
-                     (0.27, 0.20, 0.34, 0.93), (0.31, 0.15, 0.38, 0.95)],
+                     (-0.28, 0.15, 0.48, 0.74), (-0.15, 0.12, 0.33, 0.60), (-0.05, 0.10, 0.28, 0.42),
+                     (0.03, 0.10, 0.28, 0.43), (0.10, 0.18, 0.29, 0.60), (0.17, 0.21, 0.30, 0.86),
+                     (0.27, 0.21, 0.34, 0.94), (0.33, 0.16, 0.40, 0.96)],
                 banco=(-0.60, -0.16), cabeca=(0.37, 0.98)),
 }
 
@@ -850,7 +852,8 @@ def moto(name, M, tipo="street", cor="vermelho", bau=False):
             add(_paralama(name + "_paralama_d", R, 0.12, (15, 100), lat, (xf, 0, R)), True)
         else:  # trail: para-lama alto, preso no pé da mesa, abaixo do farol
             zf = 2 * R + 0.10
-            add(caixa(name + "_paralama_d", (xf + 0.03, 0, zf), (0.44, 0.13, 0.04), lat, raio=0.45), True)
+            pl = add(caixa(name + "_paralama_d", (xf + 0.02, 0, zf), (0.36, 0.13, 0.055), lat, raio=0.5), True)
+            pl.rotation_euler = (0, math.radians(6), 0)
 
     # ---- motor, quadro, escape
     if tipo == "cub":
@@ -916,8 +919,8 @@ def moto(name, M, tipo="street", cor="vermelho", bau=False):
              0.013, M["plastico"]))
     if bau:
         bx = (gx0 + gx1) / 2 - 0.03
-        b = add(caixa(name + "_bau", (bx, 0, gz_ + 0.20), (0.40, 0.42, 0.38), M["bau"], raio=0.24))
-        add(caixa(name + "_bau_faixa", (bx - 0.205, 0, gz_ + 0.14), (0.012, 0.30, 0.045), M["refletivo"],
+        b = add(caixa(name + "_bau", (bx, 0, gz_ + 0.18), (0.36, 0.38, 0.34), M["bau"], raio=0.13))
+        add(caixa(name + "_bau_faixa", (bx - 0.182, 0, gz_ + 0.13), (0.012, 0.28, 0.04), M["refletivo"],
                   raio=0.45))
     return {"raiz": root, "rodas": rodas, "lataria": lataria, "rosto": None, "corpo": corpo, "partes": partes}
 

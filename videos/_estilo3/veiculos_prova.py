@@ -11,7 +11,7 @@ import bpy, bmesh
 from mathutils import Vector
 import veiculos3 as v3
 
-FUNDO = "#DCE3EA"
+FUNDO = "#FFE07A"
 
 
 def args():
@@ -42,17 +42,13 @@ def nova_cena(res, amostras):
     c.diffuse_bounces = 3
     c.glossy_bounces = 3
     c.caustics_reflective = c.caustics_refractive = False
-    sc.view_settings.view_transform = "AgX"
-    try:
-        sc.view_settings.look = "AgX - Medium High Contrast"
-    except TypeError:
-        sc.view_settings.look = "None"
+    sc.view_settings.view_transform = "Standard"      # cores vivas (o AgX deixava pastel)
     w = bpy.data.worlds.new("mundo")
     sc.world = w
     w.use_nodes = True
     bg = w.node_tree.nodes["Background"]
     bg.inputs["Color"].default_value = v3.lin(FUNDO)
-    bg.inputs["Strength"].default_value = 0.35
+    bg.inputs["Strength"].default_value = 0.12
     return sc
 
 
@@ -103,11 +99,11 @@ def camera(pos, alvo, lens=50):
 def estudio(centro, dist):
     cx, cy, cz = centro
     ciclorama(fundo_y=cy + 4.5)
-    luz_area("key", (cx - dist * 0.55, cy - dist * 0.75, cz + dist * 0.75), centro, 1400 * (dist / 8) ** 2,
+    luz_area("key", (cx - dist * 0.55, cy - dist * 0.75, cz + dist * 0.75), centro, 1400 * 0.3 * (dist / 8) ** 2,
              dist * 0.7, "#FFF6EC")
-    luz_area("fill", (cx + dist * 0.8, cy - dist * 0.55, cz + dist * 0.25), centro, 450 * (dist / 8) ** 2,
+    luz_area("fill", (cx + dist * 0.8, cy - dist * 0.55, cz + dist * 0.25), centro, 450 * 0.3 * (dist / 8) ** 2,
              dist * 0.8, "#E8F0FF")
-    luz_area("rim", (cx + dist * 0.2, cy + dist * 0.7, cz + dist * 0.55), centro, 900 * (dist / 8) ** 2,
+    luz_area("rim", (cx + dist * 0.2, cy + dist * 0.7, cz + dist * 0.55), centro, 900 * 0.3 * (dist / 8) ** 2,
              dist * 0.35, "#FFFFFF")
 
 
@@ -141,8 +137,8 @@ def checar_rodas(D):
 def cena_carros(amostras, escala):
     nova_cena((int(2000 * escala), int(720 * escala)), amostras)
     M = v3.materiais({})
-    lista = [("picape", "branco", False), ("suv", "cinza", False), ("hatch", "#FF7A1A", True),
-             ("popular", "prata", False), ("seda", "#3A3F47", False)]
+    lista = [("picape", "vermelho", False), ("suv", "azul", False), ("hatch", "laranja", True),
+             ("popular", "amarelo", False), ("seda", "verde", False)]
     passo = 2.75
     for k, (tipo, cor, rosto) in enumerate(lista):
         D = v3.carro(f"car_{tipo}", M, tipo, cor, rosto=rosto, humor="feliz")
