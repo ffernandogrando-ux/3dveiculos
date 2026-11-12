@@ -29,11 +29,11 @@ for i in range(N):
     rumo = -90 + rnd.uniform(-28, 32)                  # -90° = para -y (a câmera)
     ini = (pn.x + rnd.uniform(-0.12, 0.12), yT - 0.1, 0)
     dur = min(D - t0 - 0.05, 1.1 + rnd.uniform(0, 0.4))
-    R.moeda_rolando(f"moeda{i}", M, ini, rumo, 0.35 + rnd.uniform(0, 0.45), t0, dur,
+    R.moeda_rolando(f"moeda{i}", M, ini, rumo, 0.45 + rnd.uniform(0, 0.5), t0, dur, r=0.03,
                     lado_cai=1 if i % 2 else -1, seed=i)
 # moedas já caídas no chão (ele vem perdendo faz tempo)
 for i in range(3):
-    m = R.moeda(f"moeda_chao{i}", M)
+    m = R.moeda(f"moeda_chao{i}", M, r=0.03)
     m.location = (pn.x + 0.25 - i * 0.2, yT - 0.32 - i * 0.07, 0.0015)
     m.rotation_euler = (math.radians(90), 0, math.radians(30 * i))
 
@@ -42,8 +42,7 @@ Z = ba.ze_adulto("ze", M, expressao="neutro", maos="todas")
 arm, V = Z["arm"], Z["rosto"]
 tz0 = t_asf + 0.05 - 0.9
 tz1 = t_asf + 0.75
-R.andar(Z, tz0, tz1, (pn.x + 1.9, yT - 0.35, 0), (pn.x + 0.42, yT - 0.2, 0))
-Z["raiz"].location = (pn.x + 1.9, yT - 0.35, 0)
+R.andar(Z, tz0, tz1, (pn.x + 2.2, yT - 0.45, 0), (pn.x + 0.8, yT - 0.35, 0))
 olha = {"tronco": (14, 0, -10), "pescoco": (12, 0, -6), "cabeca": (16, 0, -14), "quadril": (0, 0, 0),
         "coxa_e": (-4, -3, 0), "coxa_d": (0, 2, 0), "canela_e": (8, 0, 0), "canela_d": (4, 0, 0),
         "ombro_e": (-12, -14, 0), "cotovelo_e": (-55, 0, 10), "ombro_d": (-12, 14, 0), "cotovelo_d": (-55, 0, -10)}
@@ -63,16 +62,16 @@ for no, keys in (("sobr_inc", [(0, 0), (t_nem, 0), (t_nem + 0.3, -0.35)]),
         C.key_val(V[no], t, v)
 
 # ---- câmera rasteira: push-in leve; em "nem sabe" sobe e inclina para mostrar o Zé
-c0 = Vector((pn.x + 0.55, yT - 1.35, 0.26))
-a0 = Vector((pn.x + 0.05, yT - 0.15, 0.2))
-cam, al = R.camera(c0, a0, lens=24, dof=2.8)
+c0 = Vector((pn.x + 0.35, yT - 2.0, 0.42))
+a0 = Vector((pn.x + 0.15, yT - 0.35, 0.22))
+cam, al = R.camera(c0, a0, lens=30, dof=2.8)
 R.kloc(cam, 0, c0)
 R.kloc(cam, t_asf + 0.4, c0 + (a0 - c0) * 0.04)
 R.kloc(cam, D, c0 + (a0 - c0) * 0.05 + Vector((0, 0, 0.12)))
 R.kloc(al, 0, a0)
 R.kloc(al, t_asf + 0.4, a0)
-R.kloc(al, D, a0 + Vector((0.18, 0, 0.75)))
+R.kloc(al, D, a0 + Vector((0.22, 0, 0.55)))
 cam.data.dof.focus_object = None
-cam.data.dof.focus_distance = 1.25
+cam.data.dof.focus_distance = 1.7
 
 C.renderizar(P, sys.argv)
