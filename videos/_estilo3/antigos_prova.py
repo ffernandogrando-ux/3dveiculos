@@ -218,14 +218,14 @@ def cena_lineup(amostras, escala):
 
 
 def cena_perfis(amostras, escala):
-    nova_cena((int(2400 * escala), int(1100 * escala)), amostras)
-    raizes = montar({}, 2.45, 0, dz_fileira=1.15)
+    nova_cena((int(2400 * escala), int(1000 * escala)), amostras)
+    raizes = montar({}, 2.25, 0, dz_fileira=1.15)
     estudio()
     luzes(0, 8)
     so_nos_veiculos(raizes)
-    cam = camera((0.0, -20.0, 0.92), (0.0, 0.0, 0.92), lens=50)
+    cam = camera((0.0, -20.0, 1.0), (0.0, 0.0, 1.0), lens=50)
     cam.data.type = "ORTHO"
-    cam.data.ortho_scale = 7.6
+    cam.data.ortho_scale = 7.2
     render(os.path.join(HERE, "antigos_perfis.png"))
 
 
@@ -237,7 +237,7 @@ def cena_close(amostras, escala):
     for k, (tipo, cor, cons) in enumerate([LISTA[3], LISTA[1], LISTA[2]]):
         D = va.carro_antigo(f"close_{k}", M, tipo, cor, conservacao=cons, escala=0.5)
         D["raiz"].location = ((k - 1) * 2.4, 0, 0)
-        D["raiz"].rotation_euler = (0, 0, math.radians(-145 if k else -40))
+        D["raiz"].rotation_euler = (0, 0, math.radians((-40, 145, 35)[k]))
         raizes.append(D["raiz"])
     estudio()
     luzes(0, 8)

@@ -108,9 +108,9 @@ def pintura_antiga(name, cor, gasto=False):
         nt.links.new(bp.outputs["Normal"], b.inputs["Normal"])
     if not gasto:
         b.inputs["Base Color"].default_value = base
-        b.inputs["Roughness"].default_value = 0.28
-        b.inputs["Coat Weight"].default_value = 0.8
-        b.inputs["Coat Roughness"].default_value = 0.05
+        b.inputs["Roughness"].default_value = 0.32
+        b.inputs["Coat Weight"].default_value = 0.55
+        b.inputs["Coat Roughness"].default_value = 0.09
         return m
     b.inputs["Coat Weight"].default_value = 0.15
     b.inputs["Coat Roughness"].default_value = 0.35
@@ -124,7 +124,7 @@ def pintura_antiga(name, cor, gasto=False):
     rm.color_ramp.elements[1].position = 0.68
     nt.links.new(man.outputs["Fac"], rm.inputs["Fac"])
     lum = sum(base[:3]) / 3
-    queimado = [base[i] * 0.55 + lum * 0.45 + 0.05 for i in range(3)] + [1.0]
+    queimado = [base[i] * 0.65 + lum * 0.35 + 0.025 for i in range(3)] + [1.0]
     mix1 = nt.nodes.new("ShaderNodeMix")
     mix1.data_type = "RGBA"
     mix1.inputs["A"].default_value = base
@@ -288,13 +288,13 @@ def _spec_antigo(tipo):
              bojo=(0.03, 0.04), pilar_b="lata", parachoque="preto", farol="retangular", lanterna="vertical",
              calota="furos", friso=True)
     if tipo == "quadradinho":    # caixote: frente curta e de pé, teto reto, traseira vertical
-        s.update(L=3.69, wb=2.36, fr=0.72, R=0.281, larg=0.145, aro=0.165, H=1.44)
-        topo = [(3.69, 0.98, "lata"), (3.665, 1.03, "vidro"), (3.57, 1.38, "lata"), (3.50, 1.425, "teto"),
-                (1.50, 1.44, "teto"), (1.40, 1.41, "vidro"), (0.92, 0.925, "lata"), (0.10, 0.82, "lata"),
-                (0.02, 0.78, "lata"), (0.0, 0.74, None)]
-        cintura = [(3.69, 0.99), (3.45, 0.965), (0.92, 0.925), (0.0, 0.925)]
+        s.update(L=3.69, wb=2.36, fr=0.72, R=0.281, larg=0.145, aro=0.165, H=1.44, tumble=0.045)
+        topo = [(3.69, 0.98, "lata"), (3.65, 1.03, "vidro"), (3.53, 1.37, "lata"), (3.44, 1.405, "teto"),
+                (1.72, 1.44, "teto"), (1.60, 1.415, "vidro"), (0.95, 0.905, "lata"), (0.45, 0.83, "lata"),
+                (0.08, 0.755, "lata"), (0.0, 0.70, None)]
+        cintura = [(3.69, 0.99), (3.45, 0.965), (0.95, 0.91), (0.0, 0.91)]
         larguras = [(3.69, 0.755), (3.35, 0.775), (0.85, 0.775), (0.0, 0.752)]
-        janelas = [(0.95, 2.20), (2.29, 3.49)]
+        janelas = [(0.98, 2.22), (2.31, 3.30)]
         portas = [0.86, 2.25]
     elif tipo == "bolinha":      # tudo arredondado: capô caído, para-brisa deitado, teto em arco, vidro traseiro inclinado
         s.update(L=3.81, wb=2.47, fr=0.74, R=0.288, larg=0.175, aro=0.165, H=1.40, zb=0.21, tumble=0.075,
@@ -314,12 +314,12 @@ def _spec_antigo(tipo):
                  crease={1: 0.5, 2: 0.85, 3: 0.25, 4: 0.6, 5: 0.4, 6: 0.1, 7: 0.25}, crease_ponta=0.1,
                  bojo=(0.07, 0.10), pilar_b="preto", parachoque="cor", farol="cunha", lanterna="alta",
                  calota="turbina", friso=False)
-        topo = [(3.79, 0.88, "lata"), (3.75, 0.99, "lata"), (3.67, 1.07, "vidro"), (3.43, 1.375, "lata"),
-                (3.28, 1.42, "teto"), (2.25, 1.43, "teto"), (1.72, 1.40, "vidro"), (0.97, 0.905, "lata"),
-                (0.40, 0.78, "lata"), (0.08, 0.68, "lata"), (0.0, 0.62, None)]
-        cintura = [(3.79, 1.07), (3.40, 1.065), (0.97, 0.905), (0.0, 0.905)]
+        topo = [(3.79, 0.86, "lata"), (3.765, 0.96, "lata"), (3.72, 1.04, "vidro"), (3.30, 1.36, "lata"),
+                (3.17, 1.395, "teto"), (2.70, 1.425, "teto"), (2.05, 1.43, "teto"), (1.86, 1.405, "vidro"),
+                (0.98, 0.90, "lata"), (0.45, 0.78, "lata"), (0.08, 0.67, "lata"), (0.0, 0.60, None)]
+        cintura = [(3.79, 1.06), (3.30, 1.08), (0.98, 0.90), (0.0, 0.90)]
         larguras = [(3.79, 0.765), (3.30, 0.81), (0.95, 0.81), (0.30, 0.79), (0.0, 0.735)]
-        janelas = [(1.00, 1.96), (2.04, 2.83)]
+        janelas = [(1.02, 1.98), (2.06, 2.80)]
         portas = [0.93, 1.99, 2.86]
     elif tipo == "sedan90":      # três volumes reto: capô comprido, porta-malas plano, colunas finas
         s.update(L=4.20, wb=2.55, fr=0.83, R=0.292, larg=0.185, aro=0.165, H=1.39, zb=0.19, calota="turbina",
@@ -420,15 +420,23 @@ def _corpo(name, s, mats_l, mat_seg, xs, nivel):
     return corpo
 
 
-def _varre(X, sx, W, z, u0, u1, n, wrap=0.78, t_max=1.0):
+def _varre(X, sx, W, z, u0, u1, n, wrap=0.78, t_max=1.0, lateral=0.0):
     """Raios que varrem a frente (sx=1) ou a traseira (sx=-1) de y = u0*W até u1*W, dobrando a quina a partir de
-    |u| > wrap (t_canto até t_max)."""
+    |u| > wrap (t_canto até t_max). lateral > 0: segue mais esse tanto (m) pela lateral depois da quina (para-choque
+    envolvente que vai até a caixa de roda)."""
     out = []
     for k in range(n):
         u = u0 + (u1 - u0) * k / (n - 1)
         sy = 1 if u >= 0 else -1
         tc = min(t_max, max(0.0, (abs(u) - wrap) / (1 - wrap)) ** 1.4 * t_max)
         out.append(v3._canto(X, sy, abs(u) * W, z, tc, sx))
+    if lateral > 0 and t_max >= 1.0:
+        nl = max(2, int(lateral / 0.03))
+        ext = lambda sy: [((X - sx * (0.25 + lateral * q / nl), sy * 3, z), (0, -sy, 0)) for q in range(1, nl + 1)]
+        if u0 <= -0.98:
+            out = list(reversed(ext(-1))) + out
+        if u1 >= 0.98:
+            out = out + ext(1)
     return out
 
 
@@ -494,11 +502,14 @@ def carro_antigo(name, M, tipo="quadradinho", cor="branco", conservacao="ok", es
     hpc = 0.20 if s["parachoque"] == "preto" else 0.17
     epc = 0.035 if s["parachoque"] == "preto" else 0.022
     for lado, sx, X in (("d", 1, XF), ("t", -1, XR)):
-        am = _varre(X, sx, _larg_x(s, X - sx * 0.1), zpc, -0.99, 0.99, 41, wrap=0.80)
+        Ra = s["R"] + 0.042
+        lat = max(0.0, (s["fr"] if sx > 0 else s["tr"]) - Ra * 1.12 - 0.25 - 0.015)
+        am = _varre(X, sx, _larg_x(s, X - sx * 0.1), zpc, -0.99, 0.99, 41, wrap=0.80, lateral=lat)
         add(fita(f"{name}_parachoque_{lado}", sup, am, hpc, epc, cor_pc, embute=0.01))
         if s["parachoque"] != "preto":   # filete preto de borracha no meio do para-choque na cor
             add(fita(f"{name}_parachoque_filete_{lado}", sup,
-                     _varre(X, sx, _larg_x(s, X - sx * 0.1), zpc + 0.01, -0.97, 0.97, 41, wrap=0.80),
+                     _varre(X, sx, _larg_x(s, X - sx * 0.1), zpc + 0.01, -0.99, 0.99, 41, wrap=0.80,
+                            lateral=max(0.0, lat - 0.03)),
                      0.035, epc + 0.008, M["a_borracha"], embute=0.01))
     # ---- frente: faróis, grade, piscas
     zcap = _interp(topo, XF - 0.06)
@@ -512,7 +523,7 @@ def carro_antigo(name, M, tipo="quadradinho", cor="branco", conservacao="ok", es
                 fita(f"{name}_farol_moldura{sy}", sup, am, 0.15, 0.002, M["r_preto_brilho"]))
             pc = [((XF + 3, sy * W * (0.89 + 0.06 * k / 4), zfa), (-1, 0, 0)) for k in range(5)]
             pc += [v3._canto(XF, sy, W * 0.96, zfa, t) for t in (0.4, 0.7, 1.0)]
-            add(fita(f"{name}_pisca{sy}", sup, pc, 0.115, 0.008, M["a_pisca"]))
+            add(fita(f"{name}_pisca{sy}", sup, pc, 0.085, 0.008, M["a_pisca"]))
         add(fita(name + "_grade", sup, [((XF + 3, W * (-0.37 + 0.74 * k / 12), zfa), (-1, 0, 0)) for k in range(13)],
                  0.12, 0.004, M["r_preto_brilho"]))
         for q in range(4):
@@ -545,7 +556,7 @@ def carro_antigo(name, M, tipo="quadradinho", cor="branco", conservacao="ok", es
         for sy in (1, -1):
             am = [v3._canto(XF, sy, W * (0.36 + 0.60 * t), zfa + 0.025 * t, max(0, (t - 0.45) / 0.55) ** 1.3)
                   for t in [k / 16 for k in range(17)]]
-            larg_f = lambda t: 0.10 + 0.07 * math.sin(math.pi * min(1, 0.15 + t * 1.0))
+            larg_f = lambda t: 0.12 + 0.08 * math.sin(math.pi * min(1, 0.15 + t * 1.0))
             add(fita(f"{name}_farol_moldura{sy}", sup, am, lambda t: larg_f(t) + 0.02, 0.002, M["r_preto_brilho"]),
                 fita(f"{name}_farol_ref{sy}", sup, am[1:-1], lambda t: larg_f(t) - 0.02, 0.005, M["a_refletor"]),
                 fita(f"{name}_farol{sy}", sup, am, larg_f, 0.012, M["a_lente"]))
@@ -572,9 +583,9 @@ def carro_antigo(name, M, tipo="quadradinho", cor="branco", conservacao="ok", es
             add(fita(f"{name}_lanterna_pisca{sy}", sup, am[:4], 0.13, 0.009, M["a_pisca"]))
             add(fita(f"{name}_lanterna_re{sy}", sup, am[4:7], 0.13, 0.009, M["a_re"]))
         elif lt == "alta":        # lanternas altas e arredondadas na quina, subindo até a base do vidro
-            z0, z1 = zpc + 0.15, zre + 0.10
+            z0, z1 = zpc + 0.20, zre + 0.07
             am = [v3._canto(XR, sy, W * 0.86, z0 + (z1 - z0) * k / 10, 0.45, sx=-1) for k in range(11)]
-            add(fita(f"{name}_lanterna{sy}", sup, am, lambda t: 0.13 + 0.05 * math.sin(math.pi * t), 0.008,
+            add(fita(f"{name}_lanterna{sy}", sup, am, lambda t: 0.10 + 0.04 * math.sin(math.pi * t), 0.008,
                      M["a_lanterna"]))
             add(fita(f"{name}_lanterna_pisca{sy}", sup, am[5:8], 0.11, 0.012, M["a_pisca"]))
         elif lt == "faixa":       # sedã: faixa larga de ponta a ponta na tampa do porta-malas
@@ -635,7 +646,7 @@ def carro_antigo(name, M, tipo="quadradinho", cor="branco", conservacao="ok", es
     if loc is not None:
         add(elipsoide(name + "_antena_base", loc, (0.03, 0.022, 0.018), M["a_borracha"], seg=16))
         ang = math.radians(28)
-        p1 = loc + Vector((-math.sin(ang) * 0.62, 0, math.cos(ang) * 0.62))
+        p1 = loc + Vector((-math.sin(ang) * 0.42, 0, math.cos(ang) * 0.42))
         add(tubo(name + "_antena", [loc + Vector((0, 0, 0.01)), p1], 0.0045, M["a_borracha"], seg=8, suave=False))
     # ---- placas Mercosul (sem letras) no para-choque dianteiro e na tampa traseira
     if placa_on:
