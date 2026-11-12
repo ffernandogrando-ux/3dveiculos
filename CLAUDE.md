@@ -83,6 +83,21 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
   - Ponto fraco: carros reais (hatch/SUV ainda com cara de perua); picape e motos ok.
   - Vinil vivo (`boneco.py`, `_estilo3/`) e Parafuso (`pecas_veiculos.py`, `_estilo/`) ficam só como histórico.
 
+**Feito (12/11/2026, noite) — PRIMEIRO VÍDEO:**
+- Vídeo 02 "calibrar o pneu" pronto: `videos/calibrar_pneu/saida/calibrar_pneu_9x16_com_efeitos.mp4` (66,2 s, narração
+  ElevenLabs enviada pelo usuário). Fluxo novo, reutilizável: narração .wav → `faster-whisper` (venv no scratchpad;
+  `palavras.json` = tempo de cada palavra) → `tempos.json` (14 planos) → `planos/*.py` (cada plano monta a própria
+  cena e renderiza com numeração global, em paralelo; infra em `comum.py`, `_rua.py`, `_tec.py`) → `montar.py`
+  (HUD do estilo adulto, efeitos sincronizados pelas palavras, mix com a narração, whip nas trocas rua ↔ técnico).
+  Render ~2 h com 3–4 filas em CPU (12–16 amostras, 576×1024).
+- Feedback do usuário na prévia: personagem e câmera **parados demais** → próximos vídeos: câmera viva (órbita,
+  push-in forte, cortes a cada 1,5–2 s), mais cena técnica, personagem só em momentos curtos.
+- Material livre baixado (CC0/OFL; binários fora do git, `scripts/baixar_assets.sh`, `assets/LICENCAS.md`):
+  HDRIs, texturas PBR e modelos do Poly Haven/ambientCG, carros e rua Quaternius/Kenney, sons CC0, fontes;
+  `motor3d/biblioteca.py` (`hdri`, `textura_pbr`, `importar_modelo`). Prova: `videos/_assets/prova_rua.png`.
+- Teste de animação pronta (Quaternius + mocap CMU, `motor3d/animacao_pronta.py`) em andamento. Mixamo exige login
+  do usuário (ele baixa os .fbx e envia).
+
 **Pendente, nesta ordem:**
 1. Lapidar o estilo adulto (Zé menos "manequim", carros sem cara de perua) e o usuário aprovar; aprovar o nome do canal.
 2. Para animar 70 s (apontado pelo revisor): pneu com sulco + `girar_rodas()` com sinal por lado; todas as mãos

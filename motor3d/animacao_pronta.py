@@ -413,7 +413,7 @@ def caminhar(P, acao, t0, t1, p0, p1, fps=24, vel=None):
     (vel) que faz o pé não escorregar: use-a no trecho de encadear (opção vel)."""
     from mathutils import Vector
     raiz = P["raiz"]
-    v_acao = velocidade_passo(P, acao, fps=fps)
+    v_acao = vel or velocidade_passo(P, acao, fps=fps)     # vel = velocidade conhecida da ação (m/s no mundo)
     d = (Vector(p1) - Vector(p0)).length
     v_real = d / max(t1 - t0, 1e-3)
     raiz.location = p0
@@ -506,12 +506,15 @@ def _rot_mundo(arm, osso):
 
 
 def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget", raiz_osso=None,
-             mover_raiz="altura"):
+             mover_raiz="altura", amplitude=1.0, chao=True):
     """Copia o movimento do esqueleto `fonte` (BVH) para `alvo` e grava numa ação nova do alvo.
     q0..q1: quadros da fonte; inicio: 1º quadro na ação do alvo; passo: quadros da fonte por quadro do alvo.
     mover_raiz: "altura" = só sobe/desce o quadril (ande com a raiz do objeto); "tudo" = deslocamento completo
     (relativo ao 1º quadro); None = quadril fixo. A fonte fica intacta (apague-a depois).
-    O giro em z do ator no quadro q0 é anulado: o alvo começa olhando para a frente dele (-y no Zé e no UE)."""
+    O giro em z do ator no quadro q0 é anulado: o alvo começa olhando para a frente dele (-y no Zé e no UE).
+    amplitude < 1 encolhe o gesto em torno da pose do quadro q0 (0.5 = chute na metade da altura).
+    chao=True: depois de posar, sobe/desce o quadril para o tornozelo mais baixo ficar na altura do repouso (pé no
+    chão, sem flutuar nem afundar; só nos quadros em que os dois pés estão perto do chão na fonte)."""
     bpy = _bpy()
     from mathutils import Quaternion, Matrix, Vector
     sc = bpy.context.scene
@@ -575,6 +578,10 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
         break
     perna_f = perna(fonte, mwf, "lfemur", "ltibia", "lfoot")
     k_alt = perna_a / max(perna_f, 1e-3)
+    # altura: casa a articulação do quadril (meio das coxas), não a raiz (na CMU a raiz fica 9 cm acima dela)
+    canelas = [m[0] for m in mapa if m[1] in ("ltibia", "rtibia")]
+    tornozelo0 = min((mwa @ alvo.pose.bones[c].tail).z for c in canelas)
+    quadril_a0 = ((mwa @ alvo.pose.bones[src_l[0]].head) + (mwa @ alvo.pose.bones[src_r[0]].head)) / 2
     if ad_f:
         ad_f.action = acao_f
     sc.frame_set(int(q0))
@@ -596,6 +603,7 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
     arm_inv = mwa.to_quaternion().inverted()
     base_xy = None
     ultimo = {}
+    delta0 = {}
     ancestrais = set()
     for t in nomes:
         p = alvo.pose.bones[t].parent
@@ -618,6 +626,10 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
             if pb.name in nomes:
                 t, s, _, _ = nomes[pb.name]
                 delta = W @ _rot_mundo(fonte, s) @ rest_f[s].inverted() @ Ginv
+                if amplitude != 1.0:
+                    if s not in delta0:
+                        delta0[s] = delta.copy()
+                    delta = delta0[s].slerp(delta, amplitude)
                 q_mundo = delta @ calib[t]
                 q_arm = arm_inv @ q_mundo
                 qb = E.to_quaternion().inverted() @ q_arm
@@ -633,7 +645,13 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
                     if base_xy is None:
                         base_xy = hf.copy()
                     d = W @ ((hf - base_xy) * k_alt)
-                    d.z = hf.z * k_alt - h_a0.z
+                    zq = (mwf @ fonte.pose.bones["lfemur"].head).z + (mwf @ fonte.pose.bones["rfemur"].head).z
+                    dz = zq / 2 * k_alt - quadril_a0.z
+                    d.z = dz
+                    if amplitude != 1.0:
+                        z0 = delta0.setdefault("_z", dz)
+                        d = d * amplitude
+                        d.z = z0 + (dz - z0) * amplitude
                     if mover_raiz == "altura":
                         d.x = d.y = 0.0
                     loc_arm = (mwa.inverted().to_3x3() @ d)
@@ -648,11 +666,37 @@ def retarget(fonte, alvo, mapa, q0, q1, inicio=1, passo=1.0, nome_acao="retarget
                     pb.keyframe_insert("rotation_quaternion", frame=inicio + k)   # outra ação não o desalinha)
                     pb.keyframe_insert("location", frame=inicio + k)
             P[pb.name] = M
+        if chao and mover_raiz:
+            # tornozelo = cauda da canela do alvo; corrige só se a fonte tem um pé apoiado (o mais baixo < 12 cm)
+            zf = min((mwf @ fonte.pose.bones[x].head).z for x in ("lfoot", "rfoot"))
+            if zf < 0.12 * (1 / max(k_alt, 1e-3)) + 0.06:
+                za = min((mwa @ (P[c] @ Vector((0, alvo.pose.bones[c].length, 0)))).z for c in canelas)
+                dz_mundo = tornozelo0 - za
+                rb = alvo.pose.bones[raiz_osso]
+                loc_arm = mwa.inverted().to_3x3() @ Vector((0, 0, dz_mundo))
+                rb.location = rb.location + rb.bone.matrix_local.to_3x3().inverted() @ loc_arm
+                rb.keyframe_insert("location", frame=inicio + k)
         f += passo
         k += 1
     ad_a.action = None
     ad_a.use_nla = usa_nla
+    acao["k_alt"] = k_alt                 # escala fonte → alvo (para velocidade_bvh)
     return acao
+
+
+def velocidade_bvh(fonte, q0, q1, fps=24, escala=1.0):
+    """Velocidade horizontal média (m/s) do quadril da fonte entre q0 e q1, vezes `escala` (use acao["k_alt"]
+    do retarget). Serve para andar a raiz na mesma velocidade de uma caminhada retargetada com mover_raiz="altura"."""
+    bpy = _bpy()
+    sc = bpy.context.scene
+    pts = []
+    for f in (q0, q1):
+        sc.frame_set(int(f))
+        h = fonte.matrix_world @ fonte.pose.bones["hips"].head
+        pts.append(h)
+    d = pts[1] - pts[0]
+    d.z = 0
+    return d.length / max((q1 - q0) / fps, 1e-3) * escala
 
 
 def apagar(obj):
