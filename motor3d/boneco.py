@@ -291,69 +291,183 @@ def toro(name, R, r, m, loc=(0, 0, 0), eixo="z", parent=None, seg=48):
     return o
 
 
+# ================================================================ esqueleto (armature)
+OSSOS = [  # nome, cabeça, cauda, pai
+    ("quadril", (0, 0, 0.47), (0, 0, 0.6), None),
+    ("tronco", (0, 0, 0.6), (0, 0, 0.78), "quadril"),
+    ("pescoco", (0, 0, 0.78), (0, 0, 0.87), "tronco"),
+    ("cabeca", (0, 0, 0.87), (0, 0, 1.12), "pescoco"),
+]
+for _l, _sx in (("e", 1), ("d", -1)):
+    OSSOS += [(f"ombro_{_l}", (_sx * 0.15, 0, 0.74), (_sx * 0.175, 0, 0.6), "tronco"),
+              (f"cotovelo_{_l}", (_sx * 0.175, 0, 0.6), (_sx * 0.185, -0.008, 0.47), f"ombro_{_l}"),
+              (f"mao_{_l}", (_sx * 0.185, -0.008, 0.47), (_sx * 0.185, -0.012, 0.4), f"cotovelo_{_l}")]
+
+
+def _armature(name, root):
+    ad = bpy.data.armatures.new(name)
+    arm = mt.link(bpy.data.objects.new(name, ad))
+    arm.parent = root
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = {}
+    for n, h, t, pai in OSSOS:
+        b = ad.edit_bones.new(n)
+        b.head, b.tail = h, t
+        if pai:
+            b.parent = eb[pai]
+        eb[n] = b
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for pb in arm.pose.bones:
+        pb.rotation_mode = "QUATERNION"
+    return arm
+
+
+def girar(arm, osso, x=0.0, y=0.0, z=0.0):
+    """Gira um osso em graus nos eixos do MUNDO em repouso (personagem olhando -y): x<0 leva o braço para a frente,
+    y<0 abre o braço esquerdo (+x) para fora (y>0 o direito)."""
+    from mathutils import Quaternion
+    g = math.radians
+    qw = Quaternion((0, 0, 1), g(z)) @ Quaternion((0, 1, 0), g(y)) @ Quaternion((1, 0, 0), g(x))
+    br = arm.data.bones[osso].matrix_local.to_quaternion()
+    arm.pose.bones[osso].rotation_quaternion = br.inverted() @ qw @ br
+
+
+def _deforma(o, arm, grupos):
+    """Liga a malha-esqueleto (Skin) ao armature: grupos = lista com o nome do osso de cada vértice."""
+    for i, n in enumerate(grupos):
+        vg = o.vertex_groups.get(n) or o.vertex_groups.new(name=n)
+        vg.add([i], 1.0, "REPLACE")
+    md = o.modifiers.new("arm", "ARMATURE")
+    md.object = arm
+    o.modifiers.move(len(o.modifiers) - 1, 0)       # o armature deforma o esqueleto ANTES do Skin
+    return o
+
+
+def _no_osso(o, arm, osso):
+    """Prende o objeto ao osso mantendo a posição atual no mundo."""
+    bpy.context.view_layer.update()
+    mw = o.matrix_world.copy()
+    o.parent = arm
+    o.parent_type = "BONE"
+    o.parent_bone = osso
+    bpy.context.view_layer.update()
+    o.matrix_world = mw
+    return o
+
+
 # ================================================================ o mecânico
+def _mao(name, M, mat, tipo, sx, pulso):
+    """Mão de luva gordinha (pele) no pulso, apontando para -z. tipo: 'aberta' | 'aponta' | 'joinha' | 'segura'."""
+    px, py, pz = pulso
+    pele = mat("pele", rough=0.42, coat=0.15)
+    obs = []
+    palma = [(px, py, pz + 0.03), (px, py - 0.004, pz - 0.035)]
+    obs.append(skin(f"{name}_palma", palma, [(0, 1)], [(0.046, 0.032), (0.05, 0.034)], pele))
+    if tipo in ("aberta", "aponta"):
+        nd = 3 if tipo == "aberta" else 1
+        xs = (-0.022, 0.0, 0.022) if nd == 3 else (sx * -0.012,)
+        L = 0.05 if tipo == "aberta" else 0.075
+        for k, dx in enumerate(xs):
+            obs.append(skin(f"{name}_dedo{k}", [(px + dx, py - 0.006, pz - 0.05), (px + dx * 1.15, py - 0.01, pz - 0.05 - L)],
+                            [(0, 1)], [(0.017, 0.017), (0.016, 0.016)], pele))
+        if tipo == "aponta":      # outros dedos dobrados = punho
+            obs.append(skin(f"{name}_punho", [(px + sx * 0.012, py - 0.012, pz - 0.05), (px + sx * 0.012, py - 0.02,
+                                                                                        pz - 0.06)],
+                            [(0, 1)], [(0.03, 0.026), (0.028, 0.024)], pele))
+    else:                          # punho fechado (joinha / segurando)
+        obs.append(skin(f"{name}_punho", [(px, py - 0.008, pz - 0.05), (px, py - 0.016, pz - 0.065)], [(0, 1)],
+                        [(0.046, 0.034), (0.044, 0.03)], pele))
+    # polegar: no joinha aponta para -y local (fica "para cima" com o antebraço erguido)
+    if tipo == "joinha":
+        pol = [(px - sx * 0.02, py - 0.03, pz - 0.035), (px - sx * 0.02, py - 0.075, pz - 0.03)]
+    else:
+        pol = [(px - sx * 0.035, py - 0.012, pz - 0.01), (px - sx * 0.05, py - 0.022, pz - 0.04)]
+    obs.append(skin(f"{name}_polegar", pol, [(0, 1)], [(0.02, 0.02), (0.018, 0.018)], pele))
+    return obs
+
+
+POSES = {   # osso: (x, y, z) em graus no mundo, + mão esquerda / direita
+    "parado": ({"ombro_e": (0, -8, 0), "ombro_d": (0, 8, 0), "cotovelo_e": (-12, 0, 0), "cotovelo_d": (-12, 0, 0)},
+               "aberta", "segura"),
+    "aponta": ({"ombro_e": (-75, -35, 0), "cotovelo_e": (-8, 0, 0), "ombro_d": (0, 8, 0), "cotovelo_d": (-15, 0, 0)},
+               "aponta", "segura"),
+    "joinha": ({"ombro_e": (-40, -18, 0), "cotovelo_e": (-75, 0, 0), "ombro_d": (0, 8, 0), "cotovelo_d": (-15, 0, 0)},
+               "joinha", "segura"),
+    "explica": ({"ombro_e": (-35, -28, 0), "cotovelo_e": (-55, 0, 0), "ombro_d": (-35, 28, 0),
+                 "cotovelo_d": (-55, 0, 0)}, "aberta", "aberta"),
+    "espanto": ({"ombro_e": (-15, -125, 0), "cotovelo_e": (-35, 0, 0), "ombro_d": (-15, 125, 0),
+                 "cotovelo_d": (-35, 0, 0)}, "aberta", "aberta"),
+}
+
+
 def mecanico(name, M, estilo="vinil", pose="parado", expressao="sorriso", olhar=(0.0, 0.0), chave=True):
-    """Mecânico "Zé". pose: 'parado' | 'aponta' | 'joinha' | 'explica' | 'espanto'.
+    """Mecânico "Zé" com esqueleto (Z["arm"]; gire os ossos com girar(Z["arm"], osso, x, y, z)).
+    pose: 'parado' | 'aponta' | 'joinha' | 'explica' | 'espanto'.
     expressao: 'sorriso' | 'fala' | 'espanto' | 'preocupado' | 'pisca'."""
     mat = lambda n, **k: material(M, n, estilo, **k)
     root = empty(name)
     Z = {"raiz": root}
-    R = 0.21                          # raio da cabeça (cabeça = 0,42 = 1/3 da altura)
-    # ---- pernas + quadril + tronco (macacão) numa malha só
-    P = [(0, 0, 0.45), (0, 0, 0.58), (0, 0, 0.7), (0, 0, 0.8),               # 0 quadril, 1 barriga, 2 peito, 3 pescoço
-         (-0.09, 0, 0.36), (-0.095, 0, 0.2), (-0.095, 0, 0.1),              # 4-6 perna esquerda (dele: +x é a esq.)
-         (0.09, 0, 0.36), (0.095, 0, 0.2), (0.095, 0, 0.1)]                 # 7-9
-    A = [(0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6), (0, 7), (7, 8), (8, 9)]
-    Rr = [(0.155, 0.12), (0.17, 0.13), (0.165, 0.125), (0.075, 0.07),
-          (0.085, 0.08), (0.075, 0.072), (0.072, 0.07), (0.085, 0.08), (0.075, 0.072), (0.072, 0.07)]
-    corpo = skin(name + "_macacao", P, A, Rr, mat("macacao", rough=0.6), parent=root)
+    R = 0.21                          # raio da cabeça (cabeça = 0,42 ≈ 1/3 da altura)
+    arm = _armature(name + "_esqueleto", root)
+    Z["arm"] = arm
+    # ---- macacão: pernas + tronco + mangas até o cotovelo, numa malha só (ombro sem emenda)
+    P = [(0, 0, 0.47), (0, 0, 0.58), (0, 0, 0.7), (0, 0, 0.775),                 # 0-3
+         (0.105, 0, 0.37), (0.105, 0, 0.2), (0.105, -0.004, 0.095),             # 4-6 perna esq. (+x)
+         (-0.105, 0, 0.37), (-0.105, 0, 0.2), (-0.105, -0.004, 0.095),          # 7-9
+         (0.15, 0, 0.735), (0.165, 0, 0.66), (0.175, 0, 0.6),                    # 10-12 manga esq.
+         (-0.15, 0, 0.735), (-0.165, 0, 0.66), (-0.175, 0, 0.6)]                 # 13-15
+    A = [(0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6), (0, 7), (7, 8), (8, 9), (2, 10), (10, 11), (11, 12),
+         (2, 13), (13, 14), (14, 15)]
+    Rr = [(0.145, 0.118), (0.168, 0.13), (0.162, 0.125), (0.08, 0.072),
+          (0.085, 0.08), (0.074, 0.072), (0.08, 0.078), (0.085, 0.08), (0.074, 0.072), (0.08, 0.078),
+          (0.06, 0.058), (0.053, 0.053), (0.057, 0.057), (0.06, 0.058), (0.053, 0.053), (0.057, 0.057)]
+    G = ["quadril", "tronco", "tronco", "tronco", "quadril", "quadril", "quadril", "quadril", "quadril", "quadril",
+         "tronco", "ombro_e", "cotovelo_e", "tronco", "ombro_d", "cotovelo_d"]
+    corpo = skin(name + "_macacao", P, A, Rr, mat("macacao", rough=0.45), parent=root)
+    _deforma(corpo, arm, G)
     Z["corpo"] = corpo
-    # gola em V da camiseta + zíper + bolso + cinto de ferramentas
-    esfera(name + "_gola", 0.08, (0, -0.045, 0.79), mat("camiseta"), scale=(1, 0.7, 0.55), parent=root)
-    zp = mt.box(name + "_ziper", -0.006, 0.006, -0.004, 0.004, 0.5, 0.74, mat("ziper", rough=0.35), anchor="bottom")
-    zp.parent = root
-    zp.location = (0, -0.127, 0.47)
-    bo = mt.box(name + "_bolso", -0.045, 0.045, -0.006, 0.006, -0.035, 0.035, mat("macacao_escuro", rough=0.6),
+    # antebraços (pele) saindo de dentro da manga
+    for l, sx in (("e", 1), ("d", -1)):
+        ab = skin(f"{name}_antebraco_{l}", [(sx * 0.172, 0, 0.63), (sx * 0.18, -0.004, 0.54), (sx * 0.185, -0.008, 0.455)],
+                  [(0, 1), (1, 2)], [(0.046, 0.046), (0.047, 0.047), (0.043, 0.043)],
+                  mat("pele", rough=0.42, coat=0.15), parent=root)
+        _deforma(ab, arm, [f"cotovelo_{l}", f"cotovelo_{l}", f"mao_{l}"])
+    # pescoço de pele
+    pc = skin(name + "_pescoco", [(0, 0.005, 0.76), (0, 0.005, 0.89)], [(0, 1)], [(0.055, 0.052), (0.055, 0.052)],
+              mat("pele", rough=0.42, coat=0.15), parent=root)
+    _deforma(pc, arm, ["tronco", "pescoco"])
+    # gola em V da camiseta, zíper, bolso, cinto, pano no bolso de trás (presos ao tronco)
+    pecas_tronco = [esfera(name + "_gola", 0.075, (0, -0.035, 0.775), mat("camiseta"), scale=(1.1, 0.8, 0.35))]
+    zp = mt.box(name + "_ziper", -0.005, 0.005, -0.004, 0.004, 0.0, 0.25, mat("ziper", rough=0.35), anchor="bottom")
+    zp.location = (0, -0.128, 0.49)
+    zp.rotation_euler = (math.radians(4), 0, 0)
+    bo = mt.box(name + "_bolso", -0.042, 0.042, -0.005, 0.005, -0.032, 0.032, mat("macacao_escuro", rough=0.5),
                 anchor="center")
-    bo.parent = root
-    bo.location = (-0.075, -0.118, 0.69)
-    bo.rotation_euler = (math.radians(-12), 0, 0)
+    bo.location = (-0.07, -0.112, 0.69)
+    bo.rotation_euler = (math.radians(-14), 0, 0)
     _bevel(bo, 0.012)
-    skin(name + "_cinto", [(0, 0, 0.455), (0, 0, 0.485)], [(0, 1)], [(0.176, 0.138), (0.178, 0.14)],
-         mat("cinto", rough=0.5), sub=2, parent=root)
-    # pano vermelho saindo do bolso de trás
-    pano = skin(name + "_pano", [(0.06, 0.12, 0.47), (0.07, 0.15, 0.4), (0.075, 0.15, 0.33)], [(0, 1), (1, 2)],
-                [(0.035, 0.012), (0.03, 0.01), (0.026, 0.01)], mat("pano", rough=0.7), parent=root)
-    # ---- botas (bico redondo, maiores que o pé)
-    for lado, x in (("e", 0.095), ("d", -0.095)):
-        skin(f"{name}_bota_{lado}", [(x, 0.015, 0.11), (x, -0.005, 0.065), (x, -0.075, 0.055)], [(0, 1), (1, 2)],
-             [(0.072, 0.072), (0.08, 0.065), (0.07, 0.05)], mat("bota", rough=0.35), parent=root)
-        skin(f"{name}_sola_{lado}", [(x, 0.03, 0.018), (x, -0.09, 0.018)], [(0, 1)],
-             [(0.068, 0.018), (0.07, 0.018)], mat("sola", rough=0.5), parent=root)
-    # ---- braços (articulação no ombro; pose = girar o empty): manga do macacão até o cotovelo, depois antebraço
-    # e mão de pele numa malha só (sem vão), polegar separado para o joinha
-    for lado, sx in (("e", 1), ("d", -1)):
-        ombro = empty(f"{name}_ombro_{lado}")
-        ombro.parent = root
-        ombro.location = (sx * 0.13, 0, 0.72)
-        Z["braco_" + lado] = ombro
-        skin(f"{name}_manga_{lado}", [(0, 0, 0.0), (sx * 0.012, 0, -0.08), (sx * 0.02, 0, -0.155)], [(0, 1), (1, 2)],
-             [(0.058, 0.058), (0.058, 0.058), (0.063, 0.063)], mat("macacao", rough=0.6), parent=ombro)
-        skin(f"{name}_braco_pele_{lado}", [(sx * 0.018, 0, -0.11), (sx * 0.024, -0.004, -0.25),
-                                           (sx * 0.026, -0.008, -0.3), (sx * 0.026, -0.012, -0.35)],
-             [(0, 1), (1, 2), (2, 3)], [(0.045, 0.045), (0.042, 0.042), (0.054, 0.04), (0.048, 0.036)],
-             mat("pele", rough=0.42, coat=0.15), parent=ombro)
-        mao = empty(f"{name}_mao_{lado}")
-        mao.parent = ombro
-        mao.location = (sx * 0.026, -0.01, -0.32)
-        Z["mao_" + lado] = mao
-        pol = skin(f"{name}_polegar_{lado}", [(-sx * 0.028, -0.02, 0.0), (-sx * 0.04, -0.04, 0.035)],
-                   [(0, 1)], [(0.024, 0.024), (0.021, 0.021)], mat("pele", rough=0.42, coat=0.15), parent=mao)
-        Z["polegar_" + lado] = pol
-    # ---- cabeça
+    pecas_tronco += [zp, bo]
+    pecas_quadril = [skin(name + "_cinto", [(0, 0, 0.465), (0, 0, 0.495)], [(0, 1)],
+                          [(0.163, 0.13), (0.166, 0.132)], mat("cinto", rough=0.5)),
+                     skin(name + "_pano", [(0.06, 0.12, 0.47), (0.07, 0.145, 0.4), (0.075, 0.145, 0.33)],
+                          [(0, 1), (1, 2)], [(0.035, 0.012), (0.03, 0.01), (0.026, 0.01)], mat("pano", rough=0.7))]
+    # botas (peça única, bico redondo)
+    for x in (0.105, -0.105):
+        pecas_quadril.append(skin(f"{name}_bota{x:+.2f}", [(x, 0.02, 0.1), (x, -0.01, 0.055), (x, -0.09, 0.045)],
+                                  [(0, 1), (1, 2)], [(0.07, 0.06), (0.078, 0.05), (0.066, 0.045)],
+                                  mat("bota", rough=0.35)))
+    for o in pecas_tronco:
+        o.parent = root
+        _no_osso(o, arm, "tronco")
+    for o in pecas_quadril:
+        o.parent = root
+        _no_osso(o, arm, "quadril")
+    # ---- cabeça (presa ao osso da cabeça)
+    zc = 0.8 + R * 0.92
     cab = empty(name + "_cabeca")
     cab.parent = root
-    cab.location = (0, 0, 0.8 + R * 0.92)
+    cab.location = (0, 0, zc)
     Z["cabeca"] = cab
     P0 = {"sorriso": dict(), "fala": dict(boca_sorriso=0, boca_aberta=1, sobr_alt=0.4),
           "espanto": dict(boca_sorriso=0, boca_o=1, sobr_alt=1.0, abre_olho=1.15),
@@ -363,36 +477,51 @@ def mecanico(name, M, estilo="vinil", pose="parado", expressao="sorriso", olhar=
     mr, V = _rosto_mat(f"{name}_rosto_{estilo}", estilo, R, P0)
     Z["rosto"] = V
     esfera(name + "_cabeca_m", R, (0, 0, 0), mr, scale=(1.05, 0.98, 1.0), seg=64, parent=cab)
-    # nariz (bolinha) e orelhas
     esfera(name + "_nariz", 0.019, (0, -R * 0.99, -R + 0.36 * 2 * R), mat("pele_quente", rough=0.42), seg=24,
            scale=(1.15, 1, 0.9), parent=cab)
     for sx in (-1, 1):
         esfera(f"{name}_orelha{sx}", 0.04, (sx * R * 1.02, 0.01, -R + 0.42 * 2 * R), mat("pele", rough=0.42),
                scale=(0.45, 0.8, 1.0), seg=24, parent=cab)
-    # cabelo (casca lisa por baixo do boné: costeletas e nuca)
+    # cabelo: nuca/costeletas + franja aparecendo sob a aba
     esfera(name + "_cabelo", R * 1.02, (0, R * 0.1, -R * 0.04), mat("cabelo", rough=0.5), scale=(1.05, 0.95, 0.9),
            parent=cab)
-    # boné: copa + faixa + aba + botão + emblema creme (chave inglesa estilizada = círculo + barra)
-    copa = esfera(name + "_bone", R * 1.07, (0, R * 0.03, R * 0.2), mat("bone", rough=0.45, coat=0.15),
-                  scale=(1.04, 1.02, 0.8), parent=cab)
-    _corta_baixo(copa, 0.0)
-    aba = esfera(name + "_aba", R * 0.64, (0, -R * 1.08, R * 0.24), mat("aba", rough=0.45), scale=(1.12, 1.0, 0.08),
-                 parent=cab)
-    aba.rotation_euler = (math.radians(-14), 0, 0)
-    esfera(name + "_botao", R * 0.08, (0, R * 0.03, R * 1.12), mat("aba", rough=0.45), seg=24, parent=cab)
-    em = esfera(name + "_emblema", R * 0.17, (0, -R * 0.9, R * 0.72), mat("emblema", rough=0.5), scale=(1, 0.22, 1),
+    fr = esfera(name + "_franja", R * 0.5, (0, -R * 0.86, R * 0.2), mat("cabelo", rough=0.5), scale=(1.3, 0.35, 0.22),
                 seg=32, parent=cab)
-    em.rotation_euler = (math.radians(-40), 0, 0)
-    # ---- chave inglesa amarela na mão direita
-    if chave:
-        ch = empty(name + "_chave")
-        ch.parent = Z["mao_d"]
-        ch.location = (0, -0.012, 0.04)
-        skin(name + "_chave_cabo", [(0, 0, 0.0), (0, 0, -0.2)], [(0, 1)], [(0.016, 0.009), (0.016, 0.009)],
-             mat("chave", rough=0.4), parent=ch)
-        bocal = toro(name + "_chave_boca", 0.028, 0.012, mat("chave", rough=0.4), loc=(0, 0, -0.23), eixo="y", parent=ch)
-        Z["chave"] = ch
-    _posa(Z, pose)
+    fr.rotation_euler = (math.radians(-20), 0, 0)
+    # boné (copa baixa + aba encostada; sem bolinha no topo) + emblema creme de frente
+    copa = esfera(name + "_bone", R * 1.07, (0, R * 0.03, R * 0.16), mat("bone", rough=0.45, coat=0.15),
+                  scale=(1.04, 1.02, 0.84), parent=cab)
+    _corta_baixo(copa, 0.0)
+    aba = esfera(name + "_aba", R * 0.8, (0, -R * 1.0, R * 0.27), mat("aba", rough=0.45), scale=(1.0, 0.85, 0.05),
+                 parent=cab)
+    aba.rotation_euler = (math.radians(-6), 0, 0)
+    esfera(name + "_emblema", R * 0.14, (0, -R * 1.0, R * 0.56), mat("emblema", rough=0.5), scale=(1, 0.2, 1),
+           seg=32, parent=cab).rotation_euler = (math.radians(-25), 0, 0)
+    _no_osso(cab, arm, "cabeca")
+    # ---- mãos por pose (presas aos ossos das mãos)
+    rot, me, md = POSES[pose]
+    for l, sx, tipo in (("e", 1, me), ("d", -1, md)):
+        pulso = (sx * 0.185, -0.008, 0.47)
+        for o in _mao(f"{name}_mao_{l}", M, mat, tipo, sx, pulso):
+            o.parent = root
+            _no_osso(o, arm, f"mao_{l}")
+    # chave inglesa (boca aberta em "C") na mão direita
+    if chave and md == "segura":
+        px, py, pz = -0.185, -0.03, 0.43
+        cm = mat("chave", rough=0.4)
+        obs = [skin(name + "_chave_cabo", [(px, py, pz + 0.03), (px, py, pz - 0.15)], [(0, 1)],
+                    [(0.022, 0.011), (0.022, 0.011)], cm)]
+        arco = [(px + 0.034 * math.cos(math.radians(a)), py, pz - 0.185 + 0.034 * math.sin(math.radians(a)))
+                for a in range(-235, 60, 30)]
+        obs.append(skin(name + "_chave_boca", arco, [(i, i + 1) for i in range(len(arco) - 1)],
+                        [(0.014, 0.011)] * len(arco), cm))
+        for o in obs:
+            o.parent = root
+            _no_osso(o, arm, "mao_d")
+    # ---- pose
+    for osso, (x, y, z) in rot.items():
+        girar(arm, osso, x, y, z)
+    bpy.context.view_layer.update()
     return Z
 
 
@@ -415,29 +544,10 @@ def _corta_baixo(o, z0):
     _sub(o, 1)
 
 
-def _posa(Z, pose):
-    """Eixo y do ombro: negativo abre o braço esquerdo (+x) para fora; x negativo leva o braço para a frente."""
-    e, d = Z["braco_e"], Z["braco_d"]
-    g = math.radians
-    e.rotation_euler = (0, g(-10), 0)
-    d.rotation_euler = (0, g(10), 0)
-    if pose == "aponta":        # braço esquerdo apontando para a frente/lado
-        e.rotation_euler = (g(-70), g(-40), 0)
-    elif pose == "joinha":      # mão esquerda na frente com polegar para cima
-        e.rotation_euler = (g(-80), g(-15), 0)
-        Z["polegar_e"].rotation_euler = (g(-60), 0, 0)
-    elif pose == "explica":     # as duas mãos abertas na frente
-        e.rotation_euler = (g(-50), g(-30), 0)
-        d.rotation_euler = (g(-50), g(30), 0)
-    elif pose == "espanto":     # braços abertos para cima
-        e.rotation_euler = (g(-15), g(-135), 0)
-        d.rotation_euler = (g(-15), g(135), 0)
-
-
 # ================================================================ cena: oficina clara
 def oficina_clara(M, estilo="vinil", largura=8.0, fundo_y=1.6):
     """Parede azul-acinzentada clara, rodapé com faixa amarela, chão epóxi liso, prateleira com pneus e galões."""
-    cor = {"parede": "#DCE6F2", "chao": "#C9D0DA", "faixa": "#FFC928", "prat": "#AEB8C6", "pneu": "#3A4256",
+    cor = {"parede": "#C9DAF0", "chao": "#C9D0DA", "faixa": "#FFC928", "prat": "#AEB8C6", "pneu": "#3A4256",
            "galao_a": "#E5484D", "galao_b": "#2F67D8", "galao_c": "#FFC928"}
 
     def m_(n, rough=0.6):
@@ -455,15 +565,15 @@ def oficina_clara(M, estilo="vinil", largura=8.0, fundo_y=1.6):
     fx.parent = root
     # prateleira
     for z in (0.62, 1.08):
-        p = mt.box(f"prat{z}", 0.5, 1.9, fundo_y - 0.32, fundo_y, z - 0.03, z, m_("prat", 0.5))
+        p = mt.box(f"prat{z}", 1.3, 2.7, fundo_y - 0.32, fundo_y, z - 0.03, z, m_("prat", 0.5))
         p.parent = root
         _bevel(p, 0.01)
     for i in range(3):        # pneus em pé
-        pn = toro(f"pneu{i}", 0.13, 0.055, m_("pneu", 0.7), loc=(0.68 + i * 0.22, fundo_y - 0.16, 0.62 + 0.185),
+        pn = toro(f"pneu{i}", 0.13, 0.055, m_("pneu", 0.7), loc=(1.48 + i * 0.22, fundo_y - 0.16, 0.62 + 0.185),
                   eixo="x", parent=root)
     for i, c in enumerate(("galao_a", "galao_b", "galao_c", "galao_a")):
         g = mt.box(f"galao{i}", -0.09, 0.09, -0.07, 0.07, 0, 0.24, m_(c, 0.5))
         g.parent = root
-        g.location = (0.7 + i * 0.32, fundo_y - 0.15, 1.08)
+        g.location = (1.5 + i * 0.32, fundo_y - 0.15, 1.08)
         _bevel(g, 0.03)
     return root

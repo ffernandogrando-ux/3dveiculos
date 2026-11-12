@@ -28,13 +28,10 @@ def preparar(estilo):
     w.use_nodes = True
     bg = w.node_tree.nodes["Background"]
     if estilo == "vinil":
-        sc.view_settings.view_transform = "AgX"
-        try:
-            sc.view_settings.look = "AgX - Medium High Contrast"
-        except TypeError:
-            pass
+        sc.view_settings.view_transform = "Standard"     # AgX deixava tudo pastel (boné salmão, macacão bebê)
+        sc.view_settings.exposure = 0.0
         bg.inputs["Color"].default_value = mt.lin("#DDE6EE")
-        bg.inputs["Strength"].default_value = 0.35
+        bg.inputs["Strength"].default_value = 0.12
     else:
         sc.view_settings.view_transform = "Standard"
         bg.inputs["Color"].default_value = mt.lin("#DCE6F2")
@@ -49,22 +46,23 @@ def preparar(estilo):
         ls.select_silhouette = ls.select_border = True
         ls.select_crease = False
         ls.linestyle.color = mt.lin("#2A1E1A")[:3]
-        ls.linestyle.thickness = 3.0
+        ls.linestyle.thickness = 2.5 * 1024 / 1024
+        ls.linestyle.chaining = "PLAIN"
     return sc
 
 
 def luzes(alvo=(0, 0, 0.6), escala=1.0):
     def area(pos, energia, tam, cor):
         d = bpy.data.lights.new("a", "AREA")
-        d.energy, d.size = energia * escala ** 2, tam * escala
+        d.energy, d.size = energia * escala ** 2 * 0.3, tam * escala
         d.color = mt.lin(cor)[:3]
         o = mt.link(bpy.data.objects.new("a", d))
         o.location = [p * escala for p in pos]
         o.rotation_mode = "QUATERNION"
         o.rotation_quaternion = (Vector(alvo) - o.location).to_track_quat("-Z", "Y")
     area((-2.2, -2.6, 2.6), 420, 2.5, "#FFF1E0")     # key (5200 K, quente)
-    area((2.6, -2.0, 1.4), 130, 2.5, "#E6EEFF")      # fill frio
-    area((0.8, 2.2, 2.4), 260, 1.5, "#FFFFFF")       # rim
+    area((2.6, -2.0, 1.4), 300, 2.5, "#E6EEFF")      # fill frio (key ~40 % mais forte)
+    area((0.6, 1.2, 2.2), 840, 1.2, "#FFFFFF")       # rim forte atrás/acima (descola da parede clara)
 
 
 def camera(pos, alvo, lens=50, dof=None):
@@ -114,7 +112,7 @@ def quadro(estilo):
     Z = bc.mecanico("ze", M, estilo=estilo, pose="aponta", expressao="fala", olhar=(0.5, 0.1))
     Z["raiz"].rotation_euler = (0, 0, math.radians(-20))
     luzes(alvo=(0, 0, 0.7))
-    camera((0.15, -2.6, 1.0), (0, 0, 0.66), lens=40, dof=(2.6, 2.8) if estilo == "vinil" else None)
+    camera((-1.05, -2.75, 0.72), (0, 0, 0.64), lens=70, dof=(2.95, 4.0) if estilo == "vinil" else None)
     render(f"ze_{estilo}_quadro.png", (576, 1024))
 
 
