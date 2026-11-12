@@ -464,14 +464,14 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
         G = ["quadril", "quadril", "tronco", "tronco", "pescoco", "tronco", "ombro_e", "tronco", "ombro_d"]
         corpo = skin(name + "_camisa", P, A, Rr, MP["camisa"], parent=root)
         _deforma(corpo, arm, G)
-        PJ = [(0, 0, 0.97), (0.1, 0, 0.9), (0.105, 0, 0.72), (0.108, -0.004, 0.5), (0.11, 0.004, 0.33),
+        PJ = [(0, 0, 0.96), (0.1, 0, 0.9), (0.105, 0, 0.72), (0.108, -0.004, 0.5), (0.11, 0.004, 0.33),
               (0.112, 0, 0.14), (-0.1, 0, 0.9), (-0.105, 0, 0.72), (-0.108, -0.004, 0.5), (-0.11, 0.004, 0.33),
-              (-0.112, 0, 0.14)]
-        AJ = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (0, 6), (6, 7), (7, 8), (8, 9), (9, 10)]
+              (-0.112, 0, 0.14), (0, -0.01, 1.06)]          # 11: cós (fica sob a camisa; faz do quadril um nó de 3)
+        AJ = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (0, 6), (6, 7), (7, 8), (8, 9), (9, 10), (0, 11)]
         RJ = [(0.168, 0.128), (0.098, 0.096), (0.09, 0.088), (0.064, 0.064), (0.064, 0.064), (0.07, 0.07),
-              (0.098, 0.096), (0.09, 0.088), (0.064, 0.064), (0.064, 0.064), (0.07, 0.07)]
+              (0.098, 0.096), (0.09, 0.088), (0.064, 0.064), (0.064, 0.064), (0.07, 0.07), (0.155, 0.12)]
         GJ = ["quadril", "quadril", "coxa_e", "canela_e", "canela_e", "canela_e",
-              "quadril", "coxa_d", "canela_d", "canela_d", "canela_d"]
+              "quadril", "coxa_d", "canela_d", "canela_d", "canela_d", "quadril"]
         calca_o = skin(name + "_calca", PJ, AJ, RJ, MP["calca"], parent=root)
         _deforma(calca_o, arm, GJ)
         Z["calca"] = calca_o

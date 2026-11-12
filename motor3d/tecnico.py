@@ -704,6 +704,7 @@ def _fazer_deforma(d, bojo, lift, h0, rb, H):
     def deforma(a, r, t):
         """Deslocamento (da, dr) da superfície externa lisa no ângulo t (0 = no chão)."""
         tnn = np.clip((r - rb) / H, 0, 1)
+        t = np.arctan2(np.sin(t), np.cos(t))         # ângulo a partir do chão em [-pi, pi]
         w = np.exp(-(t / 0.42) ** 2)
         wb = np.exp(-(t / 0.62) ** 2)
         r1 = r - d * w * tnn ** 1.6
@@ -746,7 +747,8 @@ def _tracejado(nome, pts, larg, traco, vao, mat, y=-0.0015):
 
 
 def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
-               mat_secao_pneu=None, seg_ang=460, cor_pegada=None, camadas=True, fantasma=None):
+               mat_secao_pneu=None, seg_ang=460, cor_pegada=None, camadas=True, fantasma=None,
+               metade="tras", aro=True, mat_borracha_pneu=None, gasto_ombro=0.0):
     """Pneu 205/55 R16 cortado ao meio pelo plano vertical que contém o eixo (fica a metade de trás),
     com aro de liga de 5 raios inteiro, disco de freio e a pegada desenhada no chão.
 
@@ -755,9 +757,16 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
     Eixo do pneu = X local; o pneu encosta no chão (z = 0 do 'loc').
     fantasma: cor (ex.: VERDE) para desenhar, tracejado sobre a seção de baixo, o perfil do pneu CALIBRADO
     (pressão 1.0) apoiado no mesmo chão: mostra quanto o flanco dobrou e o aro desceu.
+    metade: "tras" (corte, padrão) | "frente" (só a metade da frente, sem tampas: some na varredura de raio-X)
+            | "inteiro" (pneu fechado, sem corte).
+    aro: inclui aro/cubo/disco. mat_borracha_pneu: material da borracha (ex.: mat_borracha_viva()).
+    gasto_ombro (0..1): ombros da banda lisos (sulcos das beiradas comidos pelo desgaste).
+    A malha da borracha leva os atributos "ombro" (beirada da banda) e "flanco_q" (flanco perto do chão, onde a
+    borracha dobra e esquenta), usados por mat_borracha_viva().
     Retorna dict com objetos, âncoras (pontos 3D de mundo p/ callouts) e medidas da pegada."""
     H = R - rb
     d, bojo, lift, h0 = _params_pressao(pressao, R)
+    tampas = metade == "tras"
 
     P, Nn = _perfil_pneu(R, rb)
     n = len(P)
@@ -781,7 +790,16 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
     rel += 0.0012 * _faixa(tn, 0.80, 0.10, 0.04) * (1 - banda)       # degrau do ombro
     ombro = _smooth(np.abs(a0), 0.072, 0.080) * banda
 
-    th = np.linspace(0.0, math.pi, seg_ang)[:, None]                 # 0 = embaixo (chão), pi = em cima
+    if metade == "tras":
+        th = np.linspace(0.0, math.pi, seg_ang)[:, None]             # 0 = embaixo (chão), pi = em cima
+    elif metade == "frente":
+        th = np.linspace(math.pi, 2 * math.pi, seg_ang)[:, None]
+    else:
+        th = np.linspace(0.0, 2 * math.pi, seg_ang, endpoint=False)[:, None]
+    if gasto_ombro:
+        g_ = gasto_ombro
+        for c, wdt in sulcos[::3]:                                   # sulcos das beiradas quase somem
+            rel += 0.0078 * 0.8 * g_ * _faixa(a0, c, wdt, 0.0016) * banda
 
     deforma = _fazer_deforma(d, bojo, lift, h0, rb, H)
 
@@ -790,7 +808,7 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
     # sulcos transversais nos ombros (blocos), 64 passos por volta; corte cai no meio de um bloco
     passo = 64
     fr = (th * passo / (2 * math.pi)) % 1.0
-    transv = _faixa(fr, 0.5, 0.20, 0.06) * ombro[None, :]
+    transv = _faixa(fr, 0.5, 0.20, 0.06) * ombro[None, :] * (1 - 0.85 * gasto_ombro)
     lamelas = _faixa((th * passo * 2 / (2 * math.pi) + 0.25) % 1.0, 0.5, 0.05, 0.02) * \
         (banda * (np.abs(a0) < 0.055))[None, :]
     relevo = rel[None, :] - 0.0072 * transv - 0.0025 * lamelas
@@ -809,20 +827,34 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
     anel = np.concatenate([xyz(Ao, Ro, th), xyz(Ai[:, ::-1], Ri[:, ::-1], th)], axis=1)   # (K, 2n, 3)
     m2 = 2 * n
     verts = anel.reshape(-1, 3)
-    kk, jj = np.meshgrid(np.arange(K - 1), np.arange(m2), indexing="ij")
+    fecha = metade == "inteiro"
+    kk, jj = np.meshgrid(np.arange(K if fecha else K - 1), np.arange(m2), indexing="ij")
     j2 = (jj + 1) % m2
-    quads = np.stack([kk * m2 + jj, kk * m2 + j2, (kk + 1) * m2 + j2, (kk + 1) * m2 + jj], axis=-1).reshape(-1, 4)
+    k2 = (kk + 1) % K
+    quads = np.stack([kk * m2 + jj, kk * m2 + j2, k2 * m2 + j2, k2 * m2 + jj], axis=-1).reshape(-1, 4)
     # tampas (seção) em t = 0 e t = pi: faixa externa i <-> interna i
     caps = []
-    for k in (0, K - 1):
+    for k in ((0, K - 1) if tampas else ()):
         for i in range(n - 1):
             oi, oj = k * m2 + i, k * m2 + i + 1
             ii, ij = k * m2 + (m2 - 1 - i), k * m2 + (m2 - 2 - i)
             caps.append([oi, oj, ij, ii])
-    faces = np.vstack([quads, np.array(caps)])
+    faces = np.vstack([quads, np.array(caps)]) if caps else quads
     idx = np.r_[np.zeros(len(quads), dtype=np.int32), np.ones(len(caps), dtype=np.int32)]
     msec = mat_secao_pneu or M("sec_pneu", lambda: mat_secao("#E0601E", "sec_pneu", 0.32))
-    pneu = malha(nome + "_pneu", verts, faces, [M("borracha", mat_borracha), msec], idx, suave=38)
+    mborr = mat_borracha_pneu or M("borracha", mat_borracha)
+    pneu = malha(nome + "_pneu", verts, faces, [mborr, msec], idx, suave=38)
+    # atributos por vértice para o shader (beirada da banda / flanco perto do chão)
+    tw = np.arctan2(np.sin(th), np.cos(th))
+    perto = np.exp(-(tw / 0.75) ** 2)                                 # (K, 1)
+    fq = ((1 - banda) * np.sin(math.pi * tn) ** 1.2)[None, :] * perto
+    ob_ = np.repeat(ombro[None, :], K, axis=0)
+    zeros = np.zeros((K, n))
+    at_ombro = np.concatenate([ob_, zeros], axis=1).reshape(-1)
+    at_fq = np.concatenate([fq, zeros], axis=1).reshape(-1)
+    for nm, arr in (("ombro", at_ombro), ("flanco_q", at_fq)):
+        at = pneu.data.attributes.new(nm, "FLOAT", "POINT")
+        at.data.foreach_set("value", arr.astype(np.float32))
     _normais_fora(pneu)
     sm = np.ones(len(faces), dtype=bool)
     sm[len(quads):] = False
@@ -861,7 +893,7 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
     mat_ar = M("ar", lambda: mat_emissivo(CIANO, 0.5, "ar", alpha=0.09))
     ib = np.where(banda > 0.5)[0]
     ib = ib[np.abs(a0[ib]) < 0.090]
-    for t in (0.0, math.pi):
+    for t in ((0.0, math.pi) if tampas else ()):
         camadas_v, camadas_f, camadas_m = [], [], []
 
         def add(vs, fs, mi):
@@ -925,10 +957,11 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
         objs.append(_tracejado(nome + "_fantasma", pts, 0.0022, 0.009, 0.006, mat_emissivo(fantasma, 3.0)))
 
     # ---------- aro de liga 5 raios (inteiro), cubo e disco de freio
-    objs += _aro_5raios(nome)
+    if aro:
+        objs += _aro_5raios(nome)
 
     # ---------- pegada no chão (contorno + preenchimento)
-    pts_chao = verts[np.abs(verts[:, 2] + h0) < 0.0012]
+    pts_chao = verts[(np.abs(verts[:, 2] + h0) < 0.0012) & (verts[:, 1] >= -1e-6)]
     peg = {}
     if len(pts_chao):
         ax0, ax1 = pts_chao[:, 0].min(), pts_chao[:, 0].max()
@@ -964,7 +997,141 @@ def pneu_corte(nome, loc=(0, 0, 0), yaw=-35.0, pressao=1.0, R=0.316, rb=0.203,
         "topo": W(0.0, 0.0, R + 0.05),
         "centro": W(0.0, 0.0, 0.0),
     }
-    return {"pai": pai, "objs": objs, "ancoras": anc, "pegada": peg, "deflexao": d, "h0": h0}
+    return {"pai": pai, "objs": objs, "ancoras": anc, "pegada": peg, "deflexao": d, "h0": h0,
+            "perfil": {"a0": a0, "r0": r0, "thk": thk, "Nn": Nn, "deforma": deforma, "n": n, "R": R, "rb": rb}}
+
+
+def mat_borracha_viva(nome="borracha_viva"):
+    """Borracha com dois controles animáveis (nós Value 'desgaste' e 'calor', 0..1):
+    desgaste pinta de vermelho-dano e alisa as beiradas da banda (atributo 'ombro');
+    calor faz o flanco que dobra (atributo 'flanco_q') passar de vermelho-escuro a laranja e amarelo."""
+    m = mat_borracha(nome)
+    nt = m.node_tree
+    N, L = nt.nodes, nt.links
+    b = N["Principled BSDF"]
+    v_des = N.new("ShaderNodeValue"); v_des.name = v_des.label = "desgaste"; v_des.outputs[0].default_value = 0.0
+    v_cal = N.new("ShaderNodeValue"); v_cal.name = v_cal.label = "calor"; v_cal.outputs[0].default_value = 0.0
+    a_om = N.new("ShaderNodeAttribute"); a_om.attribute_name = "ombro"
+    a_fq = N.new("ShaderNodeAttribute"); a_fq.attribute_name = "flanco_q"
+    # desgaste
+    m1 = N.new("ShaderNodeMath"); m1.operation = "MULTIPLY"
+    L.new(a_om.outputs["Fac"], m1.inputs[0]); L.new(v_des.outputs[0], m1.inputs[1])
+    # calor: atributo * calor * 1.6 -> rampa
+    m2 = N.new("ShaderNodeMath"); m2.operation = "MULTIPLY"
+    L.new(a_fq.outputs["Fac"], m2.inputs[0]); L.new(v_cal.outputs[0], m2.inputs[1])
+    m3 = N.new("ShaderNodeMath"); m3.operation = "MULTIPLY"; m3.inputs[1].default_value = 1.6
+    m3.use_clamp = True
+    L.new(m2.outputs[0], m3.inputs[0])
+    rp = N.new("ShaderNodeValToRGB")
+    els = rp.color_ramp.elements
+    els[0].position = 0.0; els[0].color = (0, 0, 0, 1)
+    els[1].position = 1.0; els[1].color = lin("#FFC23A")
+    e2 = els.new(0.35); e2.color = lin("#8E1A08")
+    e3 = els.new(0.7); e3.color = lin(LARANJA)
+    L.new(m3.outputs[0], rp.inputs["Fac"])
+    # emissão = calor (rampa) + desgaste (vermelho)
+    cv = N.new("ShaderNodeMix"); cv.data_type = "RGBA"
+    _sock(cv, "B").default_value = lin(VERMELHO)
+    L.new(m1.outputs[0], _sock(cv, "Factor", "VALUE"))
+    L.new(rp.outputs["Color"], _sock(cv, "A"))
+    L.new([o for o in cv.outputs if o.type == "RGBA"][0], b.inputs["Emission Color"])
+    soma = N.new("ShaderNodeMath"); soma.operation = "MAXIMUM"
+    L.new(m1.outputs[0], soma.inputs[0]); L.new(m3.outputs[0], soma.inputs[1])
+    fe = N.new("ShaderNodeMath"); fe.operation = "MULTIPLY"; fe.inputs[1].default_value = 2.2
+    L.new(soma.outputs[0], fe.inputs[0])
+    L.new(fe.outputs[0], b.inputs["Emission Strength"])
+    # beirada gasta fica mais lisa (menos áspera)
+    rg = N.new("ShaderNodeMapRange")
+    rg.inputs["To Min"].default_value = 0.85; rg.inputs["To Max"].default_value = 0.35
+    L.new(m1.outputs[0], rg.inputs["Value"])
+    L.new(rg.outputs["Result"], b.inputs["Roughness"])
+    return m
+
+
+def mat_secao_viva(nome="sec_viva", cor="#E0601E"):
+    """Seção do pneu com nó Value 'desgaste': a beirada da banda (atributo 'ombro') vira vermelho-dano."""
+    m = mat_secao(cor, nome, 0.32)
+    nt = m.node_tree
+    N, L = nt.nodes, nt.links
+    b = N["Principled BSDF"]
+    v = N.new("ShaderNodeValue"); v.name = v.label = "desgaste"
+    a = N.new("ShaderNodeAttribute"); a.attribute_name = "ombro"
+    m1 = N.new("ShaderNodeMath"); m1.operation = "MULTIPLY"
+    L.new(a.outputs["Fac"], m1.inputs[0]); L.new(v.outputs[0], m1.inputs[1])
+    m2 = N.new("ShaderNodeMath"); m2.operation = "MULTIPLY"; m2.inputs[1].default_value = 6.0; m2.use_clamp = True
+    L.new(m1.outputs[0], m2.inputs[0])
+    mx = N.new("ShaderNodeMix"); mx.data_type = "RGBA"
+    _sock(mx, "A").default_value = lin(cor)
+    _sock(mx, "B").default_value = lin(VERMELHO)
+    L.new(m2.outputs[0], _sock(mx, "Factor", "VALUE"))
+    out = [o for o in mx.outputs if o.type == "RGBA"][0]
+    L.new(out, b.inputs["Base Color"]); L.new(out, b.inputs["Emission Color"])
+    return m
+
+
+def no_valor(mat, nome):
+    return mat.node_tree.nodes[nome].outputs[0]
+
+
+def pneu_animado(nome, pressoes=(1.0, 0.4), kw_b=None, **kw):
+    """Pneu em corte que vai de pressoes[0] a pressoes[1] por shape keys (mesma malha nos dois estados).
+    Cria o estado A completo e o B sem aro; copia os vértices de B como shape key "B" em cada malha
+    correspondente (borracha, camadas, ar, pegada) e apaga B. Use pneu_estado(D, f, quadro) para animar
+    (f = 0 -> A, 1 -> B; a altura do eixo acompanha). kw_b: opções só do estado B (ex.: gasto_ombro)."""
+    A = pneu_corte(nome, pressao=pressoes[0], **kw)
+    kb = dict(kw); kb.update(kw_b or {}); kb["aro"] = False
+    kb.pop("fantasma", None)
+    B = pneu_corte(nome + "_B", pressao=pressoes[1], **kb)
+    mapa = {o.name[len(nome) + 3:]: o for o in B["objs"] if o.type == "MESH"}
+    chaves = []
+    for o in A["objs"]:
+        if o.type != "MESH":
+            continue
+        suf = o.name[len(nome) + 1:]
+        ob = mapa.get(suf)
+        if ob is None or len(ob.data.vertices) != len(o.data.vertices):
+            continue
+        o.shape_key_add(name="base")
+        sk = o.shape_key_add(name="B")
+        co = np.zeros(len(ob.data.vertices) * 3)
+        ob.data.vertices.foreach_get("co", co)
+        sk.data.foreach_set("co", co)
+        chaves.append(sk)
+    for o in B["objs"]:
+        bpy.data.objects.remove(o, do_unlink=True)
+    bpy.data.objects.remove(B["pai"], do_unlink=True)
+    A["chaves"] = chaves
+    A["h0s"] = (A["h0"], B["h0"])
+    A["ancoras_B"] = B["ancoras"]
+    A["pegada_B"] = B["pegada"]
+    return A
+
+
+def pneu_estado(D, f, quadro=None):
+    """Estado do pneu animado: f = 0 (pressões[0]) .. 1 (pressões[1]). Com 'quadro', grava keyframe."""
+    for sk in D["chaves"]:
+        sk.value = f
+        if quadro is not None:
+            sk.keyframe_insert("value", frame=quadro)
+    h0a, h0b = D["h0s"]
+    pai = D["pai"]
+    if "z_chao" not in pai:
+        pai["z_chao"] = pai.location.z - h0a
+    pai.location.z = pai["z_chao"] + h0a + (h0b - h0a) * f
+    if quadro is not None:
+        pai.keyframe_insert("location", index=2, frame=quadro)
+    # o perfil fantasma (calibrado) fica preso ao chão, não desce com o eixo
+    for o in D["objs"]:
+        if o.name.endswith("_fantasma"):
+            o.location.z = -(h0b - h0a) * f
+            if quadro is not None:
+                o.keyframe_insert("location", index=2, frame=quadro)
+
+
+def ancora_mix(D, chave, f):
+    a, b = Vector(D["ancoras"][chave]), Vector(D["ancoras_B"][chave])
+    # B foi montado no mesmo loc/yaw: a âncora de B já está em coordenadas de mundo do estado B
+    return tuple(a.lerp(b, f))
 
 
 def _pegada(nome, ax0, ax1, ly, z, cor):
