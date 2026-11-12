@@ -29,7 +29,7 @@ for i in range(N):
     rumo = -90 + rnd.uniform(-28, 32)                  # -90° = para -y (a câmera)
     ini = (pn.x + rnd.uniform(-0.12, 0.12), yT - 0.1, 0)
     dur = min(D - t0 - 0.05, 1.1 + rnd.uniform(0, 0.4))
-    R.moeda_rolando(f"moeda{i}", M, ini, rumo, 0.45 + rnd.uniform(0, 0.5), t0, dur, r=0.03,
+    R.moeda_rolando(f"moeda{i}", M, ini, rumo, 0.3 + rnd.uniform(0, 0.4), t0, dur, r=0.03,
                     lado_cai=1 if i % 2 else -1, seed=i)
 # moedas já caídas no chão (ele vem perdendo faz tempo)
 for i in range(3):
@@ -42,36 +42,44 @@ Z = ba.ze_adulto("ze", M, expressao="neutro", maos="todas")
 arm, V = Z["arm"], Z["rosto"]
 tz0 = t_asf + 0.05 - 0.9
 tz1 = t_asf + 0.75
-R.andar(Z, tz0, tz1, (pn.x + 2.2, yT - 0.45, 0), (pn.x + 0.8, yT - 0.35, 0))
-olha = {"tronco": (14, 0, -10), "pescoco": (12, 0, -6), "cabeca": (16, 0, -14), "quadril": (0, 0, 0),
-        "coxa_e": (-4, -3, 0), "coxa_d": (0, 2, 0), "canela_e": (8, 0, 0), "canela_d": (4, 0, 0),
-        "ombro_e": (-12, -14, 0), "cotovelo_e": (-55, 0, 10), "ombro_d": (-12, 14, 0), "cotovelo_d": (-55, 0, -10)}
-R.krot(Z["raiz"], tz1 + 0.1, (0, 0, 90))
-R.krot(Z["raiz"], tz1 + 0.55, (0, 0, 60))              # gira para a câmera/moedas
-R.pose(Z, tz1 + 0.6, olha)
-R.pose(Z, D, dict(olha, tronco=(17, 0, -10), cabeca=(19, -5, -14)))
+dest = (pn.x + 0.88, yT + 0.12, 0)
+R.andar(Z, tz0, tz1, (pn.x + 2.3, yT + 0.05, 0), dest)
+R.krot(Z["raiz"], tz1 + 0.05, (0, 0, 90))
+R.krot(Z["raiz"], tz1 + 0.45, (0, 0, -22))              # vira para as moedas
+fica = {"tronco": (0, -3, 0), "pescoco": (0, 0, 0), "cabeca": (8, 0, 0), "quadril": (0, 0, 0),
+        "coxa_e": (-4, -3, 0), "coxa_d": (0, 2, 0), "canela_e": (6, 0, 0), "canela_d": (4, 0, 0),
+        "ombro_e": (-5, -6, 0), "cotovelo_e": (-20, 0, 0), "ombro_d": (-5, 6, 0), "cotovelo_d": (-20, 0, 0)}
+curva = {"tronco": (34, 0, 0), "pescoco": (-6, 0, 0), "cabeca": (-4, 0, 0), "quadril": (8, 0, 0),
+         "coxa_e": (-30, -4, 0), "coxa_d": (-30, 4, 0), "canela_e": (42, 0, 0), "canela_d": (42, 0, 0),
+         "ombro_e": (-50, -6, 0), "cotovelo_e": (-14, 0, 0), "ombro_d": (-50, 6, 0), "cotovelo_d": (-14, 0, 0)}
+R.pose(Z, tz1 + 0.3, fica)
+R.pose(Z, min(D - 0.1, max(t_nem, tz1 + 0.5) + 0.25), curva)            # mãos nos joelhos, olha as moedas
+R.pose(Z, D, dict(curva, cabeca=(-2, -6, 0)))
+R.kloc(Z["raiz"], tz1 + 0.3, dest)
+R.kloc(Z["raiz"], min(D - 0.1, max(t_nem, tz1 + 0.5) + 0.25), (dest[0], dest[1], -0.07))
+R.kloc(Z["raiz"], D, (dest[0], dest[1], -0.075))
 ba.mao(Z, "e", "relaxada", 1)
 ba.mao(Z, "d", "relaxada", 1)
-ba.mao(Z, "e", "aberta", C.F(tz1 + 0.45))
-ba.mao(Z, "d", "aberta", C.F(tz1 + 0.45))
-for no, keys in (("sobr_inc", [(0, 0), (t_nem, 0), (t_nem + 0.3, -0.35)]),
-                 ("sobr_alt", [(0, 0), (t_nem, 0.2), (t_nem + 0.3, 0.7)]),
-                 ("sorriso", [(0, 0.15), (t_nem, 0.0), (t_nem + 0.3, -0.4)]),
-                 ("olhar_z", [(0, 0), (tz1 + 0.4, -0.8)])):
+ba.mao(Z, "e", "punho", C.F(t_nem + 0.2))
+ba.mao(Z, "d", "punho", C.F(t_nem + 0.2))
+for no, keys in (("sobr_inc", [(0, 0), (t_nem, 0), (t_nem + 0.3, -0.55)]),
+                 ("sobr_alt", [(0, 0), (t_nem, 0.2), (t_nem + 0.3, 1.0)]),
+                 ("sorriso", [(0, 0.15), (t_nem, 0.0), (t_nem + 0.3, -0.55)]),
+                 ("olhar_z", [(0, 0), (tz1 + 0.4, -0.5)])):
     for t, v in keys:
         C.key_val(V[no], t, v)
 
 # ---- câmera rasteira: push-in leve; em "nem sabe" sobe e inclina para mostrar o Zé
-c0 = Vector((pn.x + 0.35, yT - 2.0, 0.42))
-a0 = Vector((pn.x + 0.15, yT - 0.35, 0.22))
-cam, al = R.camera(c0, a0, lens=30, dof=2.8)
+c0 = Vector((pn.x + 0.6, yT - 2.1, 0.42))
+a0 = Vector((pn.x + 0.25, yT - 0.3, 0.22))
+cam, al = R.camera(c0, a0, lens=27, dof=2.8)
 R.kloc(cam, 0, c0)
 R.kloc(cam, t_asf + 0.4, c0 + (a0 - c0) * 0.04)
-R.kloc(cam, D, c0 + (a0 - c0) * 0.05 + Vector((0, 0, 0.12)))
+R.kloc(cam, D, c0 + (a0 - c0) * 0.05 + Vector((0, 0, 0.08)))
 R.kloc(al, 0, a0)
 R.kloc(al, t_asf + 0.4, a0)
-R.kloc(al, D, a0 + Vector((0.22, 0, 0.55)))
+R.kloc(al, D, a0 + Vector((0.35, 0.1, 0.45)))
 cam.data.dof.focus_object = None
-cam.data.dof.focus_distance = 1.7
+cam.data.dof.focus_distance = 2.1
 
 C.renderizar(P, sys.argv)

@@ -371,20 +371,22 @@ def pneu_velho(name, M, R=0.29, larg=0.175, aro=0.165, gasto=1.0):
     """Pneu solto (sem roda), eixo y: miolo da banda com sulcos fundos e BEIRADAS gastas (ombros lisos, claros e
     arredondados — o sinal do pneu rodado vazio). gasto 0..1."""
     borr = _m(M, "pv_borr", "#1B1C1E", rough=0.85)
-    sulco = _m(M, "pv_sulco", "#0A0A0B", rough=0.95)
-    liso = _m(M, "pv_liso", "#4A4A4C", rough=0.35)          # ombro gasto: liso e brilhante
+    sulco = _m(M, "pv_sulco", "#08080A", rough=0.95)
+    liso = _m(M, "pv_liso", "#6A6966", rough=0.3)           # ombro gasto: liso, claro e brilhante
     w = larg / 2
-    g = 0.012
-    q = 0.02 + 0.035 * gasto                                 # quanto o ombro foi comido
-    perfil = [(aro + 0.01, -w * 0.8, 0), (aro + 0.04, -w * 1.02, 0), (R - 0.07, -w * 1.06, 0),
-              (R - q - 0.01, -w * 1.0, 2), (R - q * 0.3, -w * 0.8, 2), (R, -w * 0.55, 0),
-              (R - g, -w * 0.52, 1), (R - g, -w * 0.38, 0), (R, -w * 0.35, 0),
-              (R, -w * 0.08, 1), (R - g, -w * 0.06, 1), (R - g, w * 0.06, 0), (R, w * 0.08, 0),
-              (R, w * 0.35, 1), (R - g, w * 0.38, 1), (R - g, w * 0.52, 0), (R, w * 0.55, 2),
-              (R - q * 0.3, w * 0.8, 2), (R - q - 0.01, w * 1.0, 0), (R - 0.07, w * 1.06, 0),
-              (aro + 0.04, w * 1.02, 0), (aro + 0.01, w * 0.8, 0)]
-    # o índice vale para o trecho seguinte: recalcula para pintar os sulcos e os ombros
-    o = v3.torno(name, perfil + [perfil[0][:2] + (0,)], [borr, sulco, liso], seg=72)
+    g = 0.013
+    q = 0.02 + 0.04 * gasto                                  # quanto o ombro foi comido
+    om = 2 if gasto > 0.3 else 0
+    E = [(aro + 0.01, -w * 0.75, 0), (aro + 0.035, -w * 1.0, 0), (R - 0.065, -w * 1.05, 0),
+         (R - 0.012 - q * 0.6, -w * 0.97, om), (R - q * 0.25, -w * 0.78, 0),
+         (R, -w * 0.6, 1), (R - g, -w * 0.58, 1), (R - g, -w * 0.42, 1), (R, -w * 0.4, 0),
+         (R, -w * 0.1, 1), (R - g, -w * 0.08, 1), (R - g, w * 0.08, 1), (R, w * 0.1, 0),
+         (R, w * 0.4, 1), (R - g, w * 0.42, 1), (R - g, w * 0.58, 1), (R, w * 0.6, 0),
+         (R - q * 0.25, w * 0.78, om), (R - 0.012 - q * 0.6, w * 0.97, 0), (R - 0.065, w * 1.05, 0),
+         (aro + 0.035, w * 1.0, 0), (aro + 0.01, w * 0.75, 0), (aro + 0.01, -w * 0.75, 0)]
+    o = v3.torno(name, E, [borr, sulco, liso], seg=72)
+    for f in o.data.polygons:
+        f.use_smooth = True
     return o
 
 
@@ -429,7 +431,7 @@ def fumaca(name, M, loc, t0, t1, n=6, seed=3):
         out = nt.nodes.new("ShaderNodeOutputMaterial")
         tr = nt.nodes.new("ShaderNodeBsdfTransparent")
         df = nt.nodes.new("ShaderNodeBsdfDiffuse")
-        df.inputs["Color"].default_value = (0.95, 0.95, 0.95, 1)
+        df.inputs["Color"].default_value = (1.0, 1.0, 1.0, 1)
         mx = nt.nodes.new("ShaderNodeMixShader")
         # opacidade cai do centro para a borda (Layer Weight) e com o atributo do objeto (alpha animado em color)
         lw = nt.nodes.new("ShaderNodeLayerWeight")
@@ -459,7 +461,7 @@ def fumaca(name, M, loc, t0, t1, n=6, seed=3):
         o.color = (0, 0, 0, 1)
         o.keyframe_insert("color", frame=C.F(max(0, ts - 0.01)))
         kloc(o, ts, (x, y, z)); kesc(o, ts, 0.4)
-        o.color = (0.5, 0, 0, 1); o.keyframe_insert("color", frame=C.F(ts + 0.35))
+        o.color = (0.3, 0, 0, 1); o.keyframe_insert("color", frame=C.F(ts + 0.35))
         kloc(o, te, (x + dx, y + dy, z + 0.75)); kesc(o, te, 2.2)
         o.color = (0, 0, 0, 1); o.keyframe_insert("color", frame=C.F(te))
         obs.append(o)
