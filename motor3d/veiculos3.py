@@ -1250,14 +1250,16 @@ def _spec_real(tipo):
     if tipo == "hatch":       # Polo / HB20 / Onix: 4,05 x 1,75 x 1,47 m, aro 17
         s.update(wb=2.56, fr=0.80, tr=0.62, kick=0.07, spoiler=True)
         P = lambda XF, XR: dict(
-            topo=[(XR, 0.98, "lata"), (XR + 0.12, 1.08, "vidro"), (XR + 0.56, 1.40, "teto"), (0.40, 1.46, "vidro"),
+            topo=[(XR, 0.98, "lata"), (XR + 0.11, 1.07, "vidro"), (XR + 0.60, 1.365, "teto"), (-0.25, 1.445, "teto"),
+                  (0.40, 1.46, "vidro"),
                   (1.18, 1.03, "lata"), (XF - 0.20, 0.96, "lata"), (XF - 0.05, 0.90, "lata"), (XF, 0.84, None)],
             janelas=[(XR + 0.98, -0.08), (0.02, 1.12)], portas=[0.92, -0.06, -0.98])
     elif tipo == "suv":       # T-Cross / Creta: 4,15 x 1,76 x 1,60 m, vão livre alto
         s.update(wb=2.65, fr=0.85, tr=0.64, W=0.885, R=0.345, larg=0.215, aro=0.216, zb=0.27, belt=1.09,
                  roof=1.61, tumble=0.12, clad=True, rails=True, pilar_preto=True, kick=0.05, spoiler=True)
         P = lambda XF, XR: dict(
-            topo=[(XR, 1.07, "lata"), (XR + 0.10, 1.17, "vidro"), (XR + 0.36, 1.55, "teto"), (0.44, 1.61, "vidro"),
+            topo=[(XR, 1.07, "lata"), (XR + 0.10, 1.16, "vidro"), (XR + 0.42, 1.53, "teto"), (-0.30, 1.595, "teto"),
+                  (0.44, 1.61, "vidro"),
                   (1.22, 1.13, "lata"), (XF - 0.22, 1.06, "lata"), (XF - 0.05, 0.99, "lata"), (XF, 0.93, None)],
             janelas=[(XR + 0.62, -0.08), (0.02, 1.15)], portas=[0.96, -0.06, -1.02])
     elif tipo == "picape":    # Strada cabine simples (2 portas) com capota marítima: 4,45 m, frente alta

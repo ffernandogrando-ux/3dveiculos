@@ -222,10 +222,10 @@ def mat_secao(cor=LARANJA, nome=None, brilho=0.55, hachura=None):
 
 
 # seção "técnica" padrão: laranja queimado com hachura laranja-alerta (menos dominante que o laranja chapado)
-SECAO_ESCURA = "#8C3A12"
+SECAO_ESCURA = "#7A3010"
 
 
-def mat_secao_tecnica(nome="sec_tecnica", passo=0.007, larg=0.0013):
+def mat_secao_tecnica(nome="sec_tecnica", passo=0.009, larg=0.0016):
     return mat_secao(SECAO_ESCURA, nome, 0.35, hachura=(LARANJA, passo, larg))
 
 
@@ -251,8 +251,9 @@ def mat_emissivo(cor, forca=4.0, nome=None, alpha=1.0):
     return m
 
 
-def mat_raio_x(cor=RAIO_X, opac=0.15, nome="raio_x"):
-    """Lataria fantasma: casca transparente com borda Fresnel ciano (~15 %)."""
+def mat_raio_x(cor=RAIO_X, opac=0.15, nome="raio_x", borda=0.75):
+    """Lataria fantasma: casca transparente ciano, ~opac (15 %) de frente e até 'borda' nas silhuetas
+    (Fresnel/Layer Weight). Emissiva: lê bem sobre o fundo escuro e não depende da luz."""
     m = bpy.data.materials.new(nome)
     m.use_nodes = True
     nt = m.node_tree
@@ -260,18 +261,19 @@ def mat_raio_x(cor=RAIO_X, opac=0.15, nome="raio_x"):
         nt.nodes.remove(n)
     out = nt.nodes.new("ShaderNodeOutputMaterial")
     lw = nt.nodes.new("ShaderNodeLayerWeight")
-    lw.inputs["Blend"].default_value = 0.35
-    ramp = nt.nodes.new("ShaderNodeMath"); ramp.operation = "MULTIPLY"
-    ramp.inputs[1].default_value = opac * 4
-    clamp = nt.nodes.new("ShaderNodeClamp")
+    lw.inputs["Blend"].default_value = 0.45
+    pw = nt.nodes.new("ShaderNodeMath"); pw.operation = "POWER"; pw.inputs[1].default_value = 2.2
+    mr = nt.nodes.new("ShaderNodeMapRange")
+    mr.inputs["To Min"].default_value = opac * 0.6
+    mr.inputs["To Max"].default_value = borda
     em = nt.nodes.new("ShaderNodeEmission")
     em.inputs["Color"].default_value = lin(cor)
-    em.inputs["Strength"].default_value = 1.5
+    em.inputs["Strength"].default_value = 1.6
     tr = nt.nodes.new("ShaderNodeBsdfTransparent")
     mx = nt.nodes.new("ShaderNodeMixShader")
-    nt.links.new(lw.outputs["Facing"], ramp.inputs[0])
-    nt.links.new(ramp.outputs[0], clamp.inputs[0])
-    nt.links.new(clamp.outputs[0], mx.inputs[0])
+    nt.links.new(lw.outputs["Facing"], pw.inputs[0])
+    nt.links.new(pw.outputs[0], mr.inputs["Value"])
+    nt.links.new(mr.outputs["Result"], mx.inputs[0])
     nt.links.new(tr.outputs[0], mx.inputs[1])
     nt.links.new(em.outputs[0], mx.inputs[2])
     nt.links.new(mx.outputs[0], out.inputs["Surface"])
@@ -1454,3 +1456,398 @@ def aplicar_mods_curva_circulo(ob, esp):
     ob.data.bevel_resolution = 2
     ob.select_set(False)
     return ob
+
+
+# ============================================================ CORRENTE DE MOTO (transmissão secundária)
+PASSO_520 = 0.015875          # corrente 520: passo 5/8"
+
+
+def _coroa_perfil(N, p, rolete=0.0051, gasto=0.0, n_amostra=None):
+    """Contorno 2D (x, z) de coroa/pinhão com N dentes. Raio de assento = N*p/(2*pi) (assim os roletes
+    espaçados de p no arco caem exatamente nos vales). gasto (0..1): dente "barbatana de tubarão" —
+    ponta puxada para um lado, mais baixa e afinada, vale alargado."""
+    R = N * p / (2 * math.pi)
+    n_amostra = n_amostra or N * 24
+    us = np.linspace(0, 1, n_amostra, endpoint=False)
+    pts = []
+    h = 0.62 * p * (1 - 0.18 * gasto)                 # altura do dente acima do assento
+    for u in us:
+        k = u * N
+        f = k - math.floor(k)                          # 0 = vale (assento), 0.5 = ponta
+        # vale: arco do rolete (alargado se gasto)
+        larg_vale = 0.21 + 0.07 * gasto
+        ponta = 0.5 + 0.13 * gasto                     # ponta deslocada (gancho)
+        if f < larg_vale or f > 1 - larg_vale:
+            g = f if f < 0.5 else f - 1
+            x = g / larg_vale
+            r = R - rolete * 0.95 * math.sqrt(max(0.0, 1 - x * x)) + rolete * 0.05
+        else:
+            if f < ponta:
+                t = (f - larg_vale) / (ponta - larg_vale)
+            else:
+                t = (1 - larg_vale - f) / (1 - larg_vale - ponta)
+            t = max(0.0, min(1.0, t))
+            forma = math.sin(t * math.pi / 2) ** (0.9 if gasto < 0.5 else 0.6)
+            if gasto < 0.5:
+                forma = min(forma, 0.86) / 0.86            # dente sadio: topo chato
+            r = R + 0.05 * rolete + h * forma
+        a = 2 * math.pi * u
+        pts.append((r * math.sin(a), r * math.cos(a)))
+    return pts, R
+
+
+def _engrenagem(nome, N, p, esp, mats, gasto=0.0, furos=5, r_cubo=None, chanfro=0.0008):
+    pts, R = _coroa_perfil(N, p, gasto=gasto)
+    ob = extrudar_xz(nome, pts, -esp / 2, esp / 2, mats, suave=25)
+    if furos and R > 0.06:
+        for k in range(furos):
+            a = 2 * math.pi * (k + 0.5) / furos
+            cont = []
+            r0, r1 = R * 0.42, R * 0.70
+            for j in range(16):
+                aa = a - 0.30 + 0.60 * j / 15
+                cont.append((r1 * math.sin(aa), r1 * math.cos(aa)))
+            for j in range(16):
+                aa = a + 0.20 - 0.40 * j / 15
+                cont.append((r0 * math.sin(aa), r0 * math.cos(aa)))
+            cut = extrudar_xz("_furo", cont, -esp, esp)
+            chanfrar(cut, 0.004, 3, angulo=30)
+            booleano(ob, cut)
+    r_cubo = r_cubo or min(0.028, R * 0.3)
+    booleano(ob, cilindro("_bore", r_cubo * 0.55, (0, -esp, 0), (0, esp, 0), segs=48))
+    chanfrar(ob, chanfro, 1, angulo=30)
+    # faces planas (as duas faces da chapa) sempre chapadas: sem estrias de sombreamento nos n-gons
+    me = ob.data
+    nor = np.zeros(len(me.polygons) * 3); me.polygons.foreach_get("normal", nor)
+    sm = np.abs(nor.reshape(-1, 3)[:, 1]) < 0.98
+    me.polygons.foreach_set("use_smooth", sm)
+    me.update()
+    return ob, R
+
+
+def _caminho_corrente(r1, r2, D):
+    """Caminho aberto entre o pinhão (centro 0,0, raio r1) e a coroa (centro D,0, raio r2) em (x, z).
+    Devolve função s -> (ponto, tangente) e o comprimento total. Começa no ponto tangente de cima do pinhão
+    e segue para a coroa (sentido horário na vista)."""
+    nx = (r2 - r1) / D
+    sz = math.sqrt(1 - nx * nx)
+    P1t = Vector((-r1 * nx, r1 * sz)); P2t = Vector((D - r2 * nx, r2 * sz))
+    P2b = Vector((D - r2 * nx, -r2 * sz)); P1b = Vector((-r1 * nx, -r1 * sz))
+    a2t = math.atan2(sz, -nx); a2b = math.atan2(-sz, -nx)
+    span2 = a2t - a2b
+    span1 = 2 * math.pi - span2
+    L1 = (P2t - P1t).length
+    segs = [("lin", P1t, P2t, L1), ("arc2", a2t, -span2, r2 * span2), ("lin", P2b, P1b, L1),
+            ("arc1", a2b, -span1, r1 * span1)]
+    total = sum(sg[3] for sg in segs)
+
+    def em(s_):
+        s_ = s_ % total
+        for tipo, A, B, Ls in segs:
+            if s_ <= Ls:
+                t = s_ / Ls
+                if tipo == "lin":
+                    return A.lerp(B, t), "lin_cima" if A is P1t else "lin_baixo", t
+                ang = A + B * t
+                c = Vector((D, 0)) if tipo == "arc2" else Vector((0, 0))
+                r = r2 if tipo == "arc2" else r1
+                return c + Vector((math.cos(ang), math.sin(ang))) * r, tipo, t
+            s_ -= Ls
+        return P1t, "lin_cima", 0.0
+    return em, total
+
+
+def _instancias(nome, molde_vs, molde_fs, mats_idx, matrizes, mats):
+    """Junta várias cópias transformadas de uma malha-molde (lista de vértices/faces) num objeto só."""
+    V = np.array(molde_vs, dtype=float)
+    Vh = np.c_[V, np.ones(len(V))]
+    vs, fs, mi = [], [], []
+    for Mx in matrizes:
+        A = np.array(Mx)
+        base = len(vs)
+        vs.extend((Vh @ A.T)[:, :3].tolist())
+        fs.extend([[base + i for i in f] for f in molde_fs])
+        mi.extend(mats_idx)
+    ob = malha(nome, vs, fs, mats, mi, suave=35)
+    return ob
+
+
+def _molde_de(ob):
+    me = ob.data
+    vs = [tuple(v.co) for v in me.vertices]
+    fs = [list(pg.vertices) for pg in me.polygons]
+    mi = [pg.material_index for pg in me.polygons]
+    bpy.data.objects.remove(ob, do_unlink=True)
+    return vs, fs, mi
+
+
+def mat_aco_lubrificado(nome="aco_lub", tinta="#FAEACB"):
+    """Aço polido com película de óleo (coat; 'tinta' = cor da película, âmbar onde o óleo acumula)."""
+    m, b = _principled(nome)
+    b.inputs["Base Color"].default_value = lin("#B8C0C9")
+    b.inputs["Metallic"].default_value = 1.0
+    b.inputs["Roughness"].default_value = 0.16
+    b.inputs["Coat Weight"].default_value = 1.0
+    b.inputs["Coat Roughness"].default_value = 0.03
+    b.inputs["Coat Tint"].default_value = lin(tinta)
+    b.inputs["Coat IOR"].default_value = 1.47
+    return m
+
+
+def mat_aco_enferrujado(nome="aco_ferrugem", quanto=0.65, base="#7C848D"):
+    """Aço seco e fosco com manchas de ferrugem laranja-marrom (ruído em 2 escalas)."""
+    m, b = _principled(nome)
+    nt = m.node_tree
+    N, L = nt.nodes, nt.links
+    tcn = N.new("ShaderNodeTexCoord")
+    nz = N.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 45.0
+    nz.inputs["Detail"].default_value = 8.0
+    nz.inputs["Roughness"].default_value = 0.65
+    L.new(tcn.outputs["Object"], nz.inputs["Vector"])
+    mr = N.new("ShaderNodeMapRange")
+    mr.inputs["From Min"].default_value = 0.62 - 0.25 * quanto
+    mr.inputs["From Max"].default_value = 0.70 - 0.25 * quanto
+    L.new(nz.outputs["Fac"], mr.inputs["Value"])
+    nz2 = N.new("ShaderNodeTexNoise")
+    nz2.inputs["Scale"].default_value = 900.0
+    L.new(tcn.outputs["Object"], nz2.inputs["Vector"])
+    ru = N.new("ShaderNodeMix"); ru.data_type = "RGBA"
+    _sock(ru, "A").default_value = lin("#341A0C")
+    _sock(ru, "B").default_value = lin("#5E2C12")
+    L.new(nz2.outputs["Fac"], _sock(ru, "Factor", "VALUE"))
+    cm = N.new("ShaderNodeMix"); cm.data_type = "RGBA"
+    _sock(cm, "A").default_value = lin(base)
+    L.new([o for o in ru.outputs if o.type == "RGBA"][0], _sock(cm, "B"))
+    L.new(mr.outputs["Result"], _sock(cm, "Factor", "VALUE"))
+    L.new([o for o in cm.outputs if o.type == "RGBA"][0], b.inputs["Base Color"])
+    inv = N.new("ShaderNodeMath"); inv.operation = "SUBTRACT"; inv.inputs[0].default_value = 0.85
+    L.new(mr.outputs["Result"], inv.inputs[1])
+    L.new(inv.outputs[0], b.inputs["Metallic"])
+    rg = N.new("ShaderNodeMapRange")
+    rg.inputs["To Min"].default_value = 0.55; rg.inputs["To Max"].default_value = 0.9
+    L.new(mr.outputs["Result"], rg.inputs["Value"])
+    L.new(rg.outputs["Result"], b.inputs["Roughness"])
+    bp = N.new("ShaderNodeBump"); bp.inputs["Strength"].default_value = 0.35
+    bp.inputs["Distance"].default_value = 0.0003
+    L.new(nz2.outputs["Fac"], bp.inputs["Height"])
+    L.new(bp.outputs["Normal"], b.inputs["Normal"])
+    return m
+
+
+def corrente_moto(nome, loc=(0, 0, 0), estado="lubrificada", dentes=(14, 40), entre_eixos=0.30,
+                  yaw=0.0, inclina=0.0, passo=PASSO_520):
+    """Pinhão + coroa + corrente de rolos 520 (elos internos e externos, pinos rebitados, roletes).
+    Plano da transmissão = XZ local (eixos ao longo de Y); pinhão em x = 0, coroa em x = +entre_eixos.
+    estado: "lubrificada" (aço brilhante com película âmbar, corrente justa) ou
+            "seca" (fosca, ferrugem laranja-marrom, elos esticados ~3 %, folga/barriga no ramo de baixo,
+            roletes subindo nos dentes da coroa e dentes gastos em "barbatana").
+    Retorna dict(pai, objs, ancoras, info)."""
+    seca = estado == "seca"
+    n1, n2 = dentes
+    p = passo
+    if seca:
+        m_corr = M("aco_ferrugem", lambda: mat_aco_enferrujado("aco_ferrugem", 0.75, "#4F555C"))
+        m_rol = M("aco_ferrugem2", lambda: mat_aco_enferrujado("aco_ferrugem2", 0.95, "#43484E"))
+        m_eng = M("aco_ferr_eng", lambda: mat_aco_enferrujado("aco_ferr_eng", 0.35, "#5D646B"))
+    else:
+        m_corr = M("aco_lub", lambda: mat_aco_lubrificado("aco_lub", "#FFFFFF"))
+        m_rol = M("aco_lub_rol", lambda: mat_aco_lubrificado("aco_lub_rol", "#E6A93E"))
+        m_eng = M("aco_eng", lambda: mat_metal("#7F8892", 0.26, "aco_eng"))
+    m_pino = M("aco_pino_" + estado, lambda: mat_metal("#D0D6DC" if not seca else "#6F757C", 0.18 if not seca else 0.6,
+                                                        "aco_pino_" + estado))
+    objs = []
+    gasto = 0.85 if seca else 0.0
+    pinhao, R1 = _engrenagem(nome + "_pinhao", n1, p, 0.0075, [m_eng], gasto=gasto * 0.6, furos=0)
+    coroa, R2 = _engrenagem(nome + "_coroa", n2, p, 0.0070, [m_eng], gasto=gasto, furos=5)
+    coroa.data.transform(Matrix.Translation((entre_eixos, 0, 0)))
+    objs += [pinhao, coroa]
+    # cubo/eixo de saída e cubo da roda (simples)
+    objs.append(cilindro(nome + "_eixo", 0.011, (0, -0.03, 0), (0, 0.03, 0), segs=6, mats=[m_pino]))
+    objs.append(cilindro(nome + "_cubo", 0.034, (entre_eixos, 0.004, 0), (entre_eixos, 0.03, 0), segs=48,
+                         mats=[M("alu_cubo", lambda: mat_metal("#8E97A1", 0.35, "alu_cubo"))]))
+    for k in range(5):
+        a = 2 * math.pi * k / 5
+        x, z = entre_eixos + 0.024 * math.sin(a), 0.024 * math.cos(a)
+        objs.append(cilindro(f"{nome}_paraf{k}", 0.0042, (x, -0.0055, z), (x, 0.031, z), segs=6, mats=[m_pino]))
+
+    # caminho dos roletes: seca = elos esticados -> roletes sobem nos dentes (raio maior) e passo maior
+    folga_r = 0.0026 if seca else 0.0
+    pe = p * (1.03 if seca else 1.0)
+    em, total = _caminho_corrente(R1 + folga_r * 0.5, R2 + folga_r, entre_eixos)
+    nel = int(round(total / pe))
+    if nel % 2:
+        nel += 1
+    pe = total / nel
+    barriga = 0.030 if seca else 0.0015
+    pts = []
+    for k in range(nel):
+        q, tipo, t = em(k * pe)
+        q = Vector(q)
+        if tipo == "lin_baixo":
+            q.y -= barriga * math.sin(math.pi * t)                 # ramo de baixo "barrigudo"
+        pts.append(q)
+    # moldes: placa interna, placa externa, rolete, pino
+    def placa(nome_, r_olho, cintura, esp, y):
+        cont = []
+        for cx, a0, a1 in ((0.0, math.pi / 2, 3 * math.pi / 2), (p, -math.pi / 2, math.pi / 2)):
+            for j in range(17):
+                a = a0 + (a1 - a0) * j / 16
+                cont.append((cx + r_olho * math.cos(a), r_olho * math.sin(a)))
+            # cintura (lado de baixo/cima)
+            if cx == 0.0:
+                cont.append((p / 2, -cintura))
+            else:
+                cont.append((p / 2, cintura))
+        ob = extrudar_xz(nome_, cont, y - esp / 2, y + esp / 2, suave=30)
+        chanfrar(ob, 0.00035, 1, angulo=30)
+        return ob
+    yi, ye = 0.0040, 0.0058                     # meia-largura: placas internas / externas
+    molde_int = []
+    for sy in (-1, 1):
+        molde_int.append(placa("_pi", 0.0071, 0.0060, 0.0015, sy * yi))
+    ob_r = cilindro("_rol", 0.0050, (0, -yi + 0.0008, 0), (0, yi - 0.0008, 0), segs=20)
+    ob_r2 = cilindro("_rol2", 0.0050, (p, -yi + 0.0008, 0), (p, yi - 0.0008, 0), segs=20)
+    molde_ext = [placa("_pe", 0.0071, 0.0064, 0.0015, sy * ye) for sy in (-1, 1)]
+    pinos = [cilindro("_pino", 0.0026, (cx, -ye - 0.0013, 0), (cx, ye + 0.0013, 0), segs=14) for cx in (0.0, p)]
+    mi_ = juntar(molde_int, "_mi"); mr_ = juntar([ob_r, ob_r2], "_mr")
+    me_ = juntar(molde_ext, "_me"); mp_ = juntar(pinos, "_mp")
+    Vi, Fi, _ = _molde_de(mi_); Vr, Fr, _ = _molde_de(mr_)
+    Ve, Fe, _ = _molde_de(me_); Vp, Fp, _ = _molde_de(mp_)
+    mat_int, mat_ext = [], []
+    for k in range(nel):
+        a, b = pts[k], pts[(k + 1) % nel]
+        d = b - a
+        ang = math.atan2(d.y, d.x)
+        esc = d.length / p
+        Mx = (Matrix.Translation((a.x, 0, a.y)) @ Matrix.Rotation(-ang, 4, "Y")
+              @ Matrix.Diagonal((esc, 1, 1, 1)))
+        (mat_int if k % 2 == 0 else mat_ext).append(Mx)
+    objs.append(_instancias(nome + "_placas_int", Vi, Fi, [0] * len(Fi), mat_int, [m_corr]))
+    objs.append(_instancias(nome + "_roletes", Vr, Fr, [0] * len(Fr), mat_int, [m_rol]))
+    objs.append(_instancias(nome + "_placas_ext", Ve, Fe, [0] * len(Fe), mat_ext, [m_corr]))
+    objs.append(_instancias(nome + "_pinos", Vp, Fp, [0] * len(Fp), mat_ext, [m_pino]))
+
+    pai = bpy.data.objects.new(nome, None)
+    bpy.context.scene.collection.objects.link(pai)
+    for o in objs:
+        o.parent = pai
+    pai.location = loc
+    pai.rotation_euler = (math.radians(inclina), 0, math.radians(yaw))
+    bpy.context.view_layer.update()
+    mw = pai.matrix_world
+
+    def W(x, y, z):
+        return tuple(mw @ Vector((x, y, z)))
+    # âncoras
+    meio_baixo = min(range(nel), key=lambda k: (pts[k].x - entre_eixos * 0.5) ** 2 + (pts[k].y + 1) * 0)
+    baixos = [k for k in range(nel) if pts[k].y < 0 and 0.25 * entre_eixos < pts[k].x < 0.75 * entre_eixos]
+    kb = min(baixos, key=lambda k: abs(pts[k].x - entre_eixos * 0.5)) if baixos else 0
+    cimas = [k for k in range(nel) if pts[k].y > 0 and 0.3 * entre_eixos < pts[k].x < 0.7 * entre_eixos]
+    kc = min(cimas, key=lambda k: abs(pts[k].x - entre_eixos * 0.45)) if cimas else 0
+    a_d = math.radians(-112)                                     # dente exposto, do lado do pinhão
+    r_tip = R2 + 0.6 * p
+    anc = {
+        "ramo_baixo": W(pts[kb].x + p / 2, -ye - 0.001, pts[kb].y),
+        "ramo_cima": W(pts[kc].x + p / 2, -ye - 0.001, pts[kc].y),
+        "dente": W(entre_eixos + r_tip * math.sin(a_d), -0.004, r_tip * math.cos(a_d)),
+        "coroa": W(entre_eixos + R2 * 0.55 * math.sin(math.radians(200)), -0.004, R2 * 0.55 * math.cos(math.radians(200))),
+        "pinhao": W(0, -0.008, 0),
+        "centro": W(entre_eixos / 2, 0, 0),
+        "topo": W(entre_eixos / 2, 0, R2 + 0.02),
+        "esq": W(-R1 - 0.02, 0, 0), "dir": W(entre_eixos + R2 + 0.02, 0, 0),
+    }
+    return {"pai": pai, "objs": objs, "ancoras": anc,
+            "info": {"elos": nel, "passo_efetivo": pe, "R1": R1, "R2": R2}}
+
+
+# ============================================================ RAIO-X DO CARRO
+def carro_raio_x(nome="carro", tipo="hatch", loc=(0, 0, 0), yaw=-30.0, opac=0.15, cor=RAIO_X, trem=True):
+    """Carro 'real' de veiculos3 (não editado aqui: só importado) com a lataria trocada por raio-X ciano
+    (Fresnel, ~15 %), deixando ver um trem de força simplificado (motor transversal + câmbio + semi-eixos,
+    radiador, escapamento, tanque e bancos) e as rodas. Escala 1:1 (metros reais)."""
+    import veiculos3 as v3
+    Mv = {}
+    D = v3.carro(nome, Mv, tipo, "prata", estilo="real", escala=1.0)
+    rx = mat_raio_x(cor, opac, nome + "_raio_x")
+    rodas = set()
+    for r in D["rodas"]:
+        rodas.add(r.name)
+        for c in r.children_recursive:
+            rodas.add(c.name)
+
+    def troca(o):
+        if o.name in rodas or o.type not in ("MESH", "CURVE"):
+            return
+        me = o.data
+        for i in range(len(me.materials)):
+            me.materials[i] = rx
+        if not me.materials:
+            me.materials.append(rx)
+        o.visible_shadow = False
+    for o in D["raiz"].children_recursive:
+        troca(o)
+    s = D["spec"]
+    xf = s.get("xf", s["wb"] / 2)
+    R = s["R"]
+    objs = []
+    if trem:
+        alu = M("rx_alu", lambda: mat_metal("#A7AFB8", 0.33, "rx_alu"))
+        aco = M("rx_aco", lambda: mat_metal(ACO, 0.3, "rx_aco"))
+        preto = M("rx_preto", lambda: mat_pintura("#1A1D22", "rx_preto"))
+        laranja = M("rx_motor", lambda: mat_pintura(LARANJA, "rx_motor"))
+        # motor 4 cil. transversal (ao longo de y), um pouco à frente do eixo dianteiro
+        xm, zm = xf + 0.20, R + 0.22
+        bloco = caixa(nome + "_bloco", xm - 0.17, xm + 0.13, -0.30, 0.22, zm - 0.20, zm + 0.16, [alu], chanfro=0.02)
+        cabec = caixa(nome + "_cabec", xm - 0.16, xm + 0.11, -0.29, 0.21, zm + 0.16, zm + 0.27, [alu], chanfro=0.015)
+        tampa = caixa(nome + "_tampa", xm - 0.12, xm + 0.08, -0.27, 0.19, zm + 0.27, zm + 0.33, [laranja], chanfro=0.025, segs=4)
+        carter = caixa(nome + "_carter", xm - 0.15, xm + 0.11, -0.28, 0.20, zm - 0.32, zm - 0.20, [preto], chanfro=0.02)
+        objs += [bloco, cabec, tampa, carter]
+        for k in range(4):                               # coletor de admissão
+            y = -0.22 + 0.13 * k
+            objs.append(cilindro(f"{nome}_adm{k}", 0.022, (xm - 0.16, y, zm + 0.20), (xm - 0.30, y, zm + 0.08), segs=24, mats=[alu]))
+        objs.append(cilindro(nome + "_plenum", 0.045, (xm - 0.31, -0.28, zm + 0.06), (xm - 0.31, 0.20, zm + 0.06), segs=32, mats=[alu]))
+        # câmbio (lado esquerdo do motor, +y) e semi-eixos até as rodas
+        cambio = revolver(nome + "_cambio", [(0.0, 0.0), (0.0, 0.17), (0.08, 0.16), (0.20, 0.11), (0.30, 0.10),
+                                             (0.30, 0.0)], eixo="Y", segs=48, mats=[alu], centro=(xm - 0.02, 0.22, zm - 0.06))
+        objs.append(cambio)
+        yr = s["W"] - 0.12
+        for sy in (-1, 1):
+            objs.append(cilindro(f"{nome}_semieixo{sy}", 0.016, (xf, sy * 0.05, R), (xf, sy * yr, R), segs=20, mats=[aco]))
+        # radiador
+        objs.append(caixa(nome + "_radiador", xm + 0.30, xm + 0.34, -0.36, 0.36, R - 0.05, R + 0.40,
+                          [M("rx_rad", lambda: mat_metal("#59616B", 0.5, "rx_rad"))], chanfro=0.005))
+        # escapamento: do motor por baixo até a traseira, com abafador
+        xr = -s["wb"] / 2
+        esc = [(xm - 0.05, -0.05, zm - 0.18), (xm - 0.20, -0.05, 0.22), (xf - 0.45, 0.0, 0.17), (xr + 0.3, 0.02, 0.17)]
+        for a_, b_ in zip(esc[:-1], esc[1:]):
+            objs.append(cilindro(nome + "_esc", 0.025, a_, b_, segs=20, mats=[aco]))
+        objs.append(cilindro(nome + "_abafador", 0.09, (xr + 0.30, 0.02, 0.21), (xr - 0.25, 0.02, 0.21), segs=40, mats=[aco]))
+        # tanque e bancos
+        objs.append(caixa(nome + "_tanque", xr + 0.35, xr + 0.95, -0.40, 0.40, 0.20, 0.42, [preto], chanfro=0.05, segs=3))
+        banco = M("rx_banco", lambda: mat_pintura("#2B3038", "rx_banco"))
+        for xb, largura in ((0.05, 0.25), (-0.85, 0.62)):
+            for sy in ((-1, 1) if largura < 0.5 else (0,)):
+                yc = sy * 0.36
+                objs.append(caixa(nome + "_assento", xb - 0.25, xb + 0.25, yc - largura, yc + largura, 0.36, 0.50, [banco], chanfro=0.04))
+                objs.append(caixa(nome + "_encosto", xb - 0.30, xb - 0.18, yc - largura, yc + largura, 0.50, 1.10, [banco], chanfro=0.04))
+        # volante
+        bpy.ops.mesh.primitive_torus_add(major_radius=0.18, minor_radius=0.016, location=(0.62, -0.36, 0.95),
+                                         rotation=(0, math.radians(-65), 0))
+        vol = bpy.context.active_object
+        vol.data.materials.append(preto)
+        objs.append(vol)
+        for o in objs:
+            o.parent = D["raiz"]
+    D["raiz"].location = loc
+    D["raiz"].rotation_euler = (0, 0, math.radians(yaw))
+    bpy.context.view_layer.update()
+    mw = D["raiz"].matrix_world
+    D["ancoras"] = {"motor": tuple(mw @ Vector((xf + 0.20, -0.30, R + 0.33))),
+                    "cambio": tuple(mw @ Vector((xf + 0.10, 0.52, R + 0.10))),
+                    "roda_d": tuple(mw @ Vector((xf, -s["W"] - 0.05, R))),
+                    "escape": tuple(mw @ Vector((-s["wb"] / 2 - 0.2, 0.02, 0.21))),
+                    "centro": tuple(mw @ Vector((0, 0, 0.7)))}
+    D["trem"] = objs
+    D["mat_raio_x"] = rx
+    return D
