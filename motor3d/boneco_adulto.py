@@ -130,6 +130,9 @@ def _rosto(name, P, cor=None):
     s_inc = val("sobr_inc", P.get("sobr_inc", 0.0))
     sorr = val("sorriso", P.get("sorriso", 0.4))
     abert = val("boca_aberta", P.get("boca_aberta", 0.0))
+    blarg = val("boca_larg", P.get("boca_larg", 0.0))          # "E/I": boca esticada para os lados
+    bred = val("boca_redonda", P.get("boca_redonda", 0.0))     # "O/U": boca estreita e redonda
+    aperta = val("aperta", P.get("aperta", 0.0))               # pálpebra de baixo sobe (sorriso de verdade, desconfiança)
 
     ex, ez, ea, eb = 0.036, 0.016, 0.019, 0.0098
     olho = luz = iris = palp = olheira = 0.0
@@ -138,6 +141,8 @@ def _rosto(name, P, cor=None):
         ebs = op("MAXIMUM", op("MULTIPLY", abre, eb), 0.0006)
         mo = dentro(el(X, cx, ez, ea * 0.92, ebs), 0.15)
         mo = op("MULTIPLY", mo, op("LESS_THAN", Zs, op("ADD", ez, op("MULTIPLY", ebs, 0.62))))   # pálpebra cobre o topo
+        mo = op("MULTIPLY", mo, op("GREATER_THAN", Zs, op("SUBTRACT", ez, op("MULTIPLY", ebs,
+                                                                              op("SUBTRACT", 1.0, op("MULTIPLY", aperta, 0.75))))))
         # íris + pupila (presas ao branco do olho)
         ix = op("ADD", cx, op("MULTIPLY", ox, ea * 0.4))
         iz = op("ADD", ez, op("MULTIPLY", oz, eb * 0.3))
@@ -157,19 +162,28 @@ def _rosto(name, P, cor=None):
         palp = pl if palp == 0.0 else op("MAXIMUM", palp, pl)
     # sobrancelhas grossas, anguladas (ponta de dentro um pouco mais baixa = sério/simpático)
     AX = op("ABSOLUTE", X)
-    bz = op("ADD", ez + 0.021, op("MULTIPLY", s_alt, 0.006))
-    zl = op("SUBTRACT", Zs, op("ADD", bz, op("MULTIPLY", op("ADD", 0.12, s_inc), op("SUBTRACT", AX, ex))))
+    bz = op("ADD", ez + 0.021, op("MULTIPLY", s_alt, 0.0105))          # sobrancelha sobe/desce mais (lê no celular)
+    zl = op("SUBTRACT", Zs, op("ADD", bz, op("MULTIPLY", op("ADD", 0.12, op("MULTIPLY", s_inc, 2.2)),
+                                             op("SUBTRACT", AX, ex))))
     dx = op("DIVIDE", op("SUBTRACT", AX, ex - 0.002), 0.02)
     sob = dentro(op("ADD", op("POWER", op("ABSOLUTE", dx), 3.0), op("POWER", op("DIVIDE", zl, 0.0055), 2.0)), 0.25)
     # boca: lábios com curva de sorriso (z sobe nas pontas)
     mz = -0.056
-    curva = op("MULTIPLY", op("MULTIPLY", X, X), op("MULTIPLY", sorr, 18.0))
+    curva = op("MULTIPLY", op("MULTIPLY", X, X), op("MULTIPLY", sorr, 26.0))
     zb = op("SUBTRACT", Zs, op("ADD", mz, curva))
-    larg = 0.024
+    larg = op("MULTIPLY", 0.024, op("SUBTRACT", op("ADD", 1.0, op("MULTIPLY", blarg, 0.35)), op("MULTIPLY", bred, 0.4)))
     bx = op("DIVIDE", X, larg)
     labio = dentro(op("ADD", op("POWER", op("ABSOLUTE", bx), 4.0), op("POWER", op("DIVIDE", zb, 0.0055), 2.0)), 0.3)
-    fenda = dentro(op("ADD", op("POWER", op("ABSOLUTE", op("DIVIDE", X, larg * 0.95)), 4.0),
-                       op("POWER", op("DIVIDE", zb, op("ADD", 0.0011, op("MULTIPLY", abert, 0.016))), 2.0)), 0.3)
+    altf = op("ADD", 0.0011, op("ADD", op("MULTIPLY", abert, 0.016), op("MULTIPLY", op("MULTIPLY", abert, bred), 0.006)))
+    fenda = dentro(op("ADD", op("POWER", op("ABSOLUTE", op("DIVIDE", X, op("MULTIPLY", larg, 0.95))),
+                                        op("SUBTRACT", 4.0, op("MULTIPLY", bred, 2.0))),
+                       op("POWER", op("DIVIDE", zb, altf), 2.0)), 0.3)
+    # dentes de cima aparecem quando a boca abre (faixa clara no topo da fenda)
+    dentes = op("MULTIPLY", fenda, op("GREATER_THAN", zb, op("MULTIPLY", altf, 0.35)))
+    dentes = op("MULTIPLY", dentes, op("MINIMUM", op("MULTIPLY", abert, 2.0), 1.0))
+    # bochecha sobe e fica levemente rosada no sorriso aberto
+    boch = op("MULTIPLY", op("MAXIMUM", op("SUBTRACT", 1.0, el(AX, 0.05, -0.02, 0.022, 0.016)), 0.0),
+              op("MULTIPLY", op("MAXIMUM", sorr, 0.0), 0.25))
     # barba por fazer: ruído fino só no queixo/maxilar/buço
     tex = nt.nodes.new("ShaderNodeTexNoise")
     tex.inputs["Scale"].default_value = 900.0
@@ -194,7 +208,9 @@ def _rosto(name, P, cor=None):
     c = mix(c, op("MULTIPLY", olheira, op("SUBTRACT", 1.0, olho)), CR.get("olheira", "#B5735A"))
     c = mix(c, barba, CR["barba"])
     c = mix(c, op("MULTIPLY", labio, 0.85), CR["labio"])
+    c = mix(c, boch, "#D9785F")
     c = mix(c, fenda, "#4A1E1E")
+    c = mix(c, dentes, "#EDE6DA")
     c = mix(c, olho, "#F2EEE6")
     c = mix(c, op("MINIMUM", iris, 1.0), CR["iris"])
     c = mix(c, op("MINIMUM", op("MAXIMUM", op("SUBTRACT", iris, 1.0), 0.0), 1.0), "#0E0A08")
@@ -363,13 +379,16 @@ POSES = {
 
 # ================================================================ o Zé adulto (e o motorista "civil")
 EXPRESSOES = {
-    "neutro": dict(sorriso=0.15), "sorriso": dict(sorriso=0.9),
-    "fala": dict(sorriso=0.35, boca_aberta=0.8, sobr_alt=0.5),
-    "preocupado": dict(sorriso=-0.4, sobr_inc=-0.35, sobr_alt=0.6),
-    "surpreso": dict(sorriso=0.0, boca_aberta=1.0, sobr_alt=1.4, abre_olho=1.25),
-    "bravo": dict(sorriso=-0.6, sobr_inc=0.45, sobr_alt=-0.6, abre_olho=0.85, boca_aberta=0.35),
-    "careta": dict(sorriso=-0.35, sobr_inc=0.2, sobr_alt=-0.2, abre_olho=0.6),       # desconfiado, olho apertado
-    "desdem": dict(sorriso=-0.15, sobr_alt=0.9, abre_olho=0.8),                      # "tá bom ainda"
+    "neutro": dict(sorriso=0.15),
+    "sorriso": dict(sorriso=0.9, boca_larg=0.5, aperta=0.45, sobr_alt=0.25),
+    "risada": dict(sorriso=1.0, boca_aberta=0.75, boca_larg=0.6, aperta=0.7, sobr_alt=0.5),
+    "fala": dict(sorriso=0.35, boca_aberta=0.6, sobr_alt=0.5),
+    "preocupado": dict(sorriso=-0.5, sobr_inc=-0.45, sobr_alt=0.7, boca_larg=0.2),
+    "surpreso": dict(sorriso=0.0, boca_aberta=1.0, boca_redonda=0.8, sobr_alt=1.6, abre_olho=1.3),
+    "bravo": dict(sorriso=-0.7, sobr_inc=0.3, sobr_alt=-0.8, abre_olho=0.8, boca_aberta=0.35, boca_larg=0.5, aperta=0.3),
+    "careta": dict(sorriso=-0.35, sobr_inc=0.12, sobr_alt=-0.3, abre_olho=0.65, aperta=0.6, boca_larg=0.4),
+    "desdem": dict(sorriso=-0.15, sobr_alt=1.0, abre_olho=0.75, aperta=0.3, boca_redonda=0.3),
+    "duvida": dict(sorriso=-0.05, sobr_inc=0.05, sobr_alt=1.1, olhar_x=0.6, olhar_z=0.6, boca_redonda=0.6, aperta=0.2),
 }
 
 TIPOS_MAO = ("relaxada", "aponta", "aberta", "punho")
@@ -745,3 +764,77 @@ def oficina(M, largura=9.0, fundo_y=2.2):
         b.location = (0, -1.5 + k * 1.5, 5.0)
         b.parent = root
     return root
+
+
+# ================================================================ fala sincronizada (lip sync pelas palavras)
+VISEMA = {  # vogal: (boca_aberta, boca_larg, boca_redonda)
+    "a": (0.95, 0.25, 0.0), "á": (0.95, 0.25, 0.0), "â": (0.8, 0.2, 0.1), "ã": (0.7, 0.1, 0.1),
+    "e": (0.5, 0.75, 0.0), "é": (0.65, 0.6, 0.0), "ê": (0.45, 0.7, 0.0), "i": (0.3, 0.95, 0.0), "í": (0.3, 0.95, 0.0),
+    "o": (0.6, 0.0, 0.85), "ó": (0.75, 0.0, 0.7), "ô": (0.5, 0.0, 0.9), "õ": (0.55, 0.0, 0.85),
+    "u": (0.35, 0.0, 1.0), "ú": (0.35, 0.0, 1.0)}
+FECHA = set("mbp")      # consoantes que fecham os lábios
+
+
+def falar(Z, palavras, t_ini, t_fim, quadro, tempo_local=lambda t: t, intensidade=1.0):
+    """Anima a boca do rosto Z["rosto"] sílaba por sílaba com as palavras [[palavra, ini, fim], ...] (tempos globais)
+    que caem em [t_ini, t_fim). quadro(t_local) → número do quadro. Fecha a boca nos M/B/P e entre frases."""
+    V = Z["rosto"]
+
+    def chave(t, a, l, r):
+        f = quadro(tempo_local(t))
+        for nome, v in (("boca_aberta", a * intensidade), ("boca_larg", l), ("boca_redonda", r)):
+            V[nome].outputs[0].default_value = v
+            V[nome].outputs[0].keyframe_insert("default_value", frame=f)
+
+    ult = None
+    for w, a, b in palavras:
+        if b < t_ini or a >= t_fim:
+            continue
+        txt = w.lower().strip(",.?!\"'…")
+        if ult is not None and a - ult > 0.18:              # pausa: boca fecha
+            chave(ult + 0.06, 0.0, 0.1, 0.0)
+        partes = []                                         # (fração na palavra, visema)
+        n = max(1, len(txt))
+        for i, ch in enumerate(txt):
+            if ch in VISEMA:
+                partes.append((i / n, VISEMA[ch]))
+            elif ch in FECHA:
+                partes.append((i / n, (0.0, 0.2, 0.0)))
+        if not partes:
+            partes = [(0.0, (0.4, 0.3, 0.1))]
+        dur = max(b - a, 0.08)
+        for fr, (va, vl, vr) in partes:
+            chave(a + fr * dur, va, vl, vr)
+        ult = b
+    if ult is not None:
+        chave(ult + 0.08, 0.0, 0.1, 0.0)
+
+
+def piscar(Z, t0, t1, quadro, tempo_local=lambda t: t, a_cada=(2.4, 3.8), semente=3):
+    """Piscadas naturais (3 quadros) espalhadas entre t0 e t1."""
+    import random
+    rnd = random.Random(semente)
+    no = Z["rosto"]["abre_olho"].outputs[0]
+    base = no.default_value
+    t = t0 + rnd.uniform(0.4, 1.2)
+    while t < t1 - 0.2:
+        for dt, v in ((-0.05, base), (0.0, 0.05), (0.09, base)):
+            no.default_value = v
+            no.keyframe_insert("default_value", frame=quadro(tempo_local(t + dt)))
+        t += rnd.uniform(*a_cada)
+    no.default_value = base
+
+
+def expressao(Z, nome, t, quadro, tempo_local=lambda t: t, sem_boca=True):
+    """Muda para a expressão `nome` no tempo t (keyframes nos controles do rosto). sem_boca=True não mexe na
+    abertura/forma da boca (use junto com falar())."""
+    V = Z["rosto"]
+    alvo = dict(abre_olho=1.0, sobr_alt=0.0, sobr_inc=0.0, sorriso=0.15, aperta=0.0, olhar_x=V["olhar_x"].outputs[0]
+                .default_value, olhar_z=V["olhar_z"].outputs[0].default_value)
+    alvo.update(EXPRESSOES[nome])
+    for k, v in alvo.items():
+        if sem_boca and k in ("boca_aberta", "boca_larg", "boca_redonda"):
+            continue
+        if k in V:
+            V[k].outputs[0].default_value = v
+            V[k].outputs[0].keyframe_insert("default_value", frame=quadro(tempo_local(t)))
