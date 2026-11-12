@@ -26,7 +26,7 @@ LATARIA = {"branco": "#F4F4F0", "prata": "#C4C9CF", "cinza": "#868D95", "preto":
            "verde": "#00B37A", "roxo": "#7A3CFF"}
 
 BASE = {  # nome: (cor, rugosidade, coat, emissão, metálico)
-    "vidro": ("#28405A", 0.1, 0.15, 0.0, 0.0),
+    "vidro": ("#28405A", 0.08, 0.35, 0.0, 0.0),
     "plastico": ("#33373E", 0.55, 0.1, 0.0, 0.0),
     "grade": ("#2A2E34", 0.6, 0.0, 0.0, 0.0),
     "pneu": ("#2B2E33", 0.7, 0.05, 0.0, 0.0),
@@ -67,12 +67,42 @@ def vinil(name, hexcol, rough=0.4, coat=0.25, emit=0.0, metal=0.0):
     for k, v in (("Coat Weight", coat), ("Coat Roughness", 0.18)):
         if k in b.inputs:
             b.inputs[k].default_value = v
-    if name.endswith("vidro") and "Specular IOR Level" in b.inputs:
-        b.inputs["Specular IOR Level"].default_value = 0.15
+    if name.endswith("vidro"):
+        _vidro_degrade(m, b)
     if emit:
         b.inputs["Emission Color"].default_value = lin(hexcol)
         b.inputs["Emission Strength"].default_value = emit
     return m
+
+
+def _vidro_degrade(m, b):
+    """Vidro de brinquedo: azul-petróleo escuro no centro, clareando para as bordas (Fresnel) e de baixo
+    para cima, + reflexo nítido das luzes. Nunca fica "azul chapado"."""
+    nt = m.node_tree
+    lw = nt.nodes.new("ShaderNodeLayerWeight")
+    lw.inputs["Blend"].default_value = 0.45
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(tc.outputs["Object"], sep.inputs[0])
+    rz = nt.nodes.new("ShaderNodeMapRange")       # z do objeto: cintura (~0,85) -> teto (~1,5)
+    rz.inputs["From Min"].default_value = 0.85
+    rz.inputs["From Max"].default_value = 1.55
+    nt.links.new(sep.outputs["Z"], rz.inputs["Value"])
+    mx = nt.nodes.new("ShaderNodeMath")
+    mx.operation = "MAXIMUM"
+    nt.links.new(lw.outputs["Facing"], mx.inputs[0])
+    mul = nt.nodes.new("ShaderNodeMath")
+    mul.operation = "MULTIPLY"
+    mul.inputs[1].default_value = 0.55
+    nt.links.new(rz.outputs["Result"], mul.inputs[0])
+    nt.links.new(mul.outputs[0], mx.inputs[1])
+    cr = nt.nodes.new("ShaderNodeValToRGB")
+    cr.color_ramp.elements[0].color = lin("#1C3350")
+    cr.color_ramp.elements[1].color = lin("#7FA6CC")
+    nt.links.new(mx.outputs[0], cr.inputs["Fac"])
+    nt.links.new(cr.outputs["Color"], b.inputs["Base Color"])
+    if "Specular IOR Level" in b.inputs:
+        b.inputs["Specular IOR Level"].default_value = 0.45
 
 
 def materiais(M=None):
@@ -552,10 +582,23 @@ def _anel_carro(s, x, ponta=0.0):
     ]
 
 
+def aro_mat(M, cor=None):
+    """Chave de M do material do aro: None = aro claro padrão; senão cor (nome da LATARIA ou hex)."""
+    materiais(M)
+    if not cor:
+        return "aro"
+    hx = LATARIA.get(cor, cor)
+    k = "aro_" + hx.lstrip("#")
+    if k not in M:
+        M[k] = vinil("v3_" + k, hx, rough=0.32, coat=0.35)
+    return k
+
+
 def carro(name, M, tipo="hatch", cor="prata", rosto=False, humor="feliz", olhar=(0.0, 0.0), placa_on=True,
-          nivel=2):
+          nivel=2, aro=None, retrovisor=True):
     """Carro de brinquedo de vinil. tipo: hatch | popular | suv | picape | seda. cor: nome, chave de M ou hex.
     rosto=True põe olhos NOS FARÓIS e boca na grade (humor: feliz | preocupado | assustado | bravo).
+    aro=None (claro) ou cor do aro ('vermelho', '#FFC400'...). retrovisor=True põe os espelhinhos.
     Devolve dict(raiz, rodas, lataria, rosto, corpo, partes)."""
     materiais(M)
     lat = lataria_mat(M, cor)
@@ -611,7 +654,7 @@ def carro(name, M, tipo="hatch", cor="prata", rosto=False, humor="feliz", olhar=
     yw = s["W"] - s["larg"] * 0.32
     for lado, xw in (("d", s["xf"]), ("t", s["xr"])):
         for sy in (1, -1):
-            rd = roda(f"{name}_roda_{lado}{'e' if sy > 0 else 'd'}", M, R, s["larg"])
+            rd = roda(f"{name}_roda_{lado}{'e' if sy > 0 else 'd'}", M, R, s["larg"], aro_mat(M, aro))
             if sy < 0:
                 rd.rotation_euler = (0, 0, math.pi)
             filho(rd, root, (xw, sy * yw, R))
@@ -637,6 +680,18 @@ def carro(name, M, tipo="hatch", cor="prata", rosto=False, humor="feliz", olhar=
         g = caixa(f"{name}_grade", (0, 0, 0), (0.05, W * 0.92, 0.07), M["grade"], raio=0.4)
         colar(g, sup, (5, 0, s["zb"] + 0.24 + 0.05), (-1, 0, 0), embute=0.02)
         ornam.append(g)
+    # retrovisores: haste curta saindo da lateral, logo atrás da base do para-brisa
+    if retrovisor:
+        xb = max(x for x, _, tg in topo[:-1] if tg == "lata" and x > 0) - 0.05
+        for sy in (1, -1):
+            loc, nor = sup.raio((xb, sy * 5, belt + 0.07), (0, -sy, 0))
+            if loc is None:
+                continue
+            ponta = loc + Vector((-0.02, sy * 0.10, 0.025))
+            hs = tubo(f"{name}_haste_retro{sy}", [loc - nor * 0.01, ponta], 0.016, lat, suave=False)
+            cx = caixa(f"{name}_retrovisor{sy}", ponta + Vector((-0.01, sy * 0.025, 0.0)), (0.06, 0.07, 0.065),
+                       lat, raio=0.45)
+            ornam += [hs, cx]
     # piscas
     for sy in (1, -1):
         p = elipsoide(f"{name}_pisca{sy}", (0, 0, 0), (0.02, 0.035, 0.022), M["pisca"])
@@ -685,26 +740,27 @@ def _rosto_carro(name, M, sup, s, humor, olhar, lat):
     W, belt = s["W"], s["belt"]
     objs = []
     olhos = []
-    ro = 0.125
+    ro = 0.19
     for sy in (1, -1):
         e = vazio(f"{name}_olho{sy}")
         loc, nor = sup.raio((5, sy * W * 0.50, belt - 0.05), (-1, 0, 0))
-        e.location = loc - nor * 0.035
+        e.location = loc - nor * 0.05
         _orientar(e, nor)
-        bola = elipsoide(f"{name}_olho{sy}_branco", (0, 0, 0), (0.06, ro * 0.95, ro), M["olho"])
+        bola = elipsoide(f"{name}_olho{sy}_branco", (0, 0, 0), (0.085, ro * 0.95, ro), M["olho"])
         filho(bola, e)
         ox, oz = olhar
-        pr = 0.05 if humor != "assustado" else 0.034
-        pu = elipsoide(f"{name}_olho{sy}_pupila", (0.048, ox * 0.04, oz * 0.04 - 0.005), (0.018, pr, pr * 1.12),
-                       M["pupila"])
+        pr = 0.085 if humor != "assustado" else 0.055
+        px, pz = ox * 0.06 - sy * 0.012, oz * 0.06 - 0.01
+        pu = elipsoide(f"{name}_olho{sy}_pupila", (0.068, px, pz), (0.026, pr, pr * 1.12), M["pupila"])
         filho(pu, e)
-        br = elipsoide(f"{name}_olho{sy}_brilho", (0.062, 0.018 + ox * 0.04, 0.022 + oz * 0.04),
-                       (0.006, 0.014, 0.014), M["brilho"])
-        filho(br, e)
+        # brilho duplo (lê bem no celular): um grande no alto, um pequeno embaixo
+        for k, (dy, dz, r) in enumerate(((0.032, 0.036, 0.024), (-0.03, -0.034, 0.012))):
+            br = elipsoide(f"{name}_olho{sy}_brilho{k}", (0.092, px + dy, pz + dz), (0.008, r, r), M["brilho"])
+            filho(br, e)
         if humor in ("preocupado", "bravo"):
             # pálpebra na cor da lata: calota de esfera cobrindo o alto do olho, inclinada
             p = calota(f"{name}_olho{sy}_palpebra", 1.0, 70, lat)
-            p.scale = (0.066, ro * 1.03, ro * 1.07)
+            p.scale = (0.092, ro * 1.03, ro * 1.07)
             tilt = (-0.38 if humor == "preocupado" else 0.42) * sy
             p.rotation_euler = (tilt, 0, 0)
             filho(p, e)
@@ -762,14 +818,14 @@ MOTOS = {
                    banco=(-0.54, -0.02), cabeca=(0.40, 0.99)),
     "trail": dict(R=0.31, larg=0.17, xr=-0.52, xf=0.56, zc=0.42,
                   est=[(-0.78, 0.065, 0.83, 0.90), (-0.70, 0.085, 0.79, 0.93), (-0.50, 0.10, 0.72, 0.94),
-                       (-0.24, 0.11, 0.68, 0.95), (-0.04, 0.12, 0.69, 0.96), (0.06, 0.15, 0.71, 1.02),
-                       (0.20, 0.16, 0.74, 1.06), (0.32, 0.13, 0.81, 1.04), (0.38, 0.09, 0.87, 1.00)],
+                       (-0.24, 0.11, 0.68, 0.95), (-0.04, 0.13, 0.68, 0.97), (0.05, 0.18, 0.68, 1.05),
+                       (0.17, 0.20, 0.69, 1.10), (0.29, 0.19, 0.74, 1.09), (0.37, 0.12, 0.84, 1.03)],
                   banco=(-0.64, 0.02), cabeca=(0.42, 1.10)),
     "cub": dict(R=0.24, larg=0.155, xr=-0.46, xf=0.54, zc=0.24,
-                est=[(-0.70, 0.08, 0.58, 0.67), (-0.62, 0.12, 0.55, 0.73), (-0.44, 0.15, 0.54, 0.75),
-                     (-0.28, 0.15, 0.48, 0.74), (-0.15, 0.12, 0.33, 0.60), (-0.05, 0.10, 0.28, 0.42),
-                     (0.03, 0.10, 0.28, 0.43), (0.10, 0.18, 0.29, 0.60), (0.17, 0.21, 0.30, 0.86),
-                     (0.27, 0.21, 0.34, 0.94), (0.33, 0.16, 0.40, 0.96)],
+                est=[(-0.70, 0.09, 0.58, 0.67), (-0.62, 0.13, 0.55, 0.73), (-0.44, 0.16, 0.54, 0.75),
+                     (-0.28, 0.16, 0.48, 0.74), (-0.16, 0.16, 0.32, 0.57), (-0.06, 0.17, 0.27, 0.42),
+                     (0.03, 0.18, 0.27, 0.44), (0.10, 0.24, 0.28, 0.62), (0.17, 0.27, 0.29, 0.86),
+                     (0.27, 0.27, 0.33, 0.95), (0.34, 0.20, 0.40, 0.97)],
                 banco=(-0.60, -0.16), cabeca=(0.37, 0.98)),
 }
 
@@ -851,9 +907,13 @@ def moto(name, M, tipo="street", cor="vermelho", bau=False):
         if tipo == "street":
             add(_paralama(name + "_paralama_d", R, 0.12, (15, 100), lat, (xf, 0, R)), True)
         else:  # trail: para-lama alto, preso no pé da mesa, abaixo do farol
-            zf = 2 * R + 0.10
-            pl = add(caixa(name + "_paralama_d", (xf + 0.02, 0, zf), (0.36, 0.13, 0.055), lat, raio=0.5), True)
-            pl.rotation_euler = (0, math.radians(6), 0)
+            # "bico": sai de baixo do farol, abraçado pelo garfo, e desce para a frente afinando
+            p0 = Vector((cab.x - 0.03, 0, cab.z - 0.15))
+            pts = [Vector((0, 0, 0)), Vector((0.17, 0, -0.05)), Vector((0.33, 0, -0.14))]
+            pl = tubo(name + "_paralama_d", pts, [0.06, 0.022], lat)
+            pl.scale = (1, 1.6, 0.6)
+            pl.location = p0
+            add(pl, True)
 
     # ---- motor, quadro, escape
     if tipo == "cub":
@@ -910,18 +970,34 @@ def moto(name, M, tipo="street", cor="vermelho", bau=False):
     for sy in (1, -1):
         add(elipsoide(f"{name}_pisca_t{sy}", (xt + 0.04, sy * (est[0][1] + 0.025), zt0 + 0.02), (0.022, 0.02, 0.016),
                       M["pisca"]))
-    # grelha apoiada no alto da rabeta, atrás do banco
-    gx0, gx1 = xt + 0.03, banco[0] + 0.05
-    gz_ = _interp([(e[0], e[3]) for e in est], (gx0 + gx1) / 2) + 0.012
+    topo_x = [(e[0], e[3]) for e in est]
     gw = 0.085
-    add(tubo(name + "_grelha", [(gx1, gw, gz_ - 0.01), (gx0 + 0.04, gw, gz_), (gx0, gw * 0.55, gz_),
-                                (gx0, -gw * 0.55, gz_), (gx0 + 0.04, -gw, gz_), (gx1, -gw, gz_ - 0.01)],
-             0.013, M["plastico"]))
-    if bau:
-        bx = (gx0 + gx1) / 2 - 0.03
-        b = add(caixa(name + "_bau", (bx, 0, gz_ + 0.18), (0.36, 0.38, 0.34), M["bau"], raio=0.13))
-        add(caixa(name + "_bau_faixa", (bx - 0.182, 0, gz_ + 0.13), (0.012, 0.28, 0.04), M["refletivo"],
-                  raio=0.45))
+    if not bau:  # grelha pequena apoiada no alto da rabeta, atrás do banco
+        gx0, gx1 = xt + 0.03, banco[0] + 0.05
+        gz_ = _interp(topo_x, (gx0 + gx1) / 2) + 0.012
+        add(tubo(name + "_grelha", [(gx1, gw, gz_ - 0.01), (gx0 + 0.04, gw, gz_), (gx0, gw * 0.55, gz_),
+                                    (gx0, -gw * 0.55, gz_), (gx0 + 0.04, -gw, gz_), (gx1, -gw, gz_ - 0.01)],
+                 0.013, M["plastico"]))
+    else:  # bagageiro de entregador: grelha plana que passa da rabeta, com 2 escoras, e o baú em cima
+        gw = 0.12
+        gx0, gx1 = xt - 0.15, banco[0] + 0.03
+        gz_ = max(_interp(topo_x, x) for x in (xt, (xt + gx1) / 2, gx1)) + 0.03
+        add(tubo(name + "_grelha", [(gx1, gw, gz_), (gx0 + 0.04, gw, gz_), (gx0, gw * 0.6, gz_),
+                                    (gx0, -gw * 0.6, gz_), (gx0 + 0.04, -gw, gz_), (gx1, -gw, gz_),
+                                    (gx1, gw, gz_)], 0.014, M["plastico"], suave=False))
+        for xx in (gx0 + 0.09, (gx0 + gx1) / 2 + 0.04):
+            add(tubo(f"{name}_grelha_trav{xx:.2f}", [(xx, gw, gz_), (xx, -gw, gz_)], 0.011, M["plastico"],
+                     suave=False))
+        for sy in (1, -1):
+            xe = xt + 0.08
+            add(tubo(f"{name}_escora{sy}", [(gx0 + 0.06, sy * gw * 0.95, gz_),
+                                             (xe, sy * gw * 0.75, _interp(topo_x, xe) - 0.05)],
+                     0.013, M["plastico"], suave=False))
+        bx = (gx0 + gx1) / 2
+        hb = 0.34
+        add(caixa(name + "_bau", (bx, 0, gz_ + 0.012 + hb / 2), (0.36, 0.38, hb), M["bau"], raio=0.13))
+        add(caixa(name + "_bau_faixa", (bx - 0.182, 0, gz_ + 0.012 + hb * 0.4), (0.012, 0.28, 0.04),
+                  M["refletivo"], raio=0.45))
     return {"raiz": root, "rodas": rodas, "lataria": lataria, "rosto": None, "corpo": corpo, "partes": partes}
 
 

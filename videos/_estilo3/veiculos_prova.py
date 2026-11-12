@@ -11,7 +11,9 @@ import bpy, bmesh
 from mathutils import Vector
 import veiculos3 as v3
 
-FUNDO = "#FFE07A"
+FUNDO = "#FFE07A"      # parede do ciclorama
+CHAO = "#F3F5F9"       # chão (claro: sombras limpas, não vira mostarda)
+LUZ = 0.8             # multiplica as 3 luzes (ajuste fino)
 
 
 def args():
@@ -47,8 +49,8 @@ def nova_cena(res, amostras):
     sc.world = w
     w.use_nodes = True
     bg = w.node_tree.nodes["Background"]
-    bg.inputs["Color"].default_value = v3.lin(FUNDO)
-    bg.inputs["Strength"].default_value = 0.12
+    bg.inputs["Color"].default_value = v3.lin("#FFF8EC")   # ambiente branco-quente: preenche sem amarelar
+    bg.inputs["Strength"].default_value = 0.42
     return sc
 
 
@@ -66,9 +68,12 @@ def ciclorama(larg=40.0, fundo_y=6.0, raio=3.0, altura=12.0):
         rows.append([bm.verts.new((-larg / 2 + larg * i / nx, y, z)) for i in range(nx + 1)])
     for r in range(len(rows) - 1):
         for i in range(nx):
-            bm.faces.new([rows[r][i], rows[r][i + 1], rows[r + 1][i + 1], rows[r + 1][i]])
-    m = v3.vinil("ciclorama", FUNDO, rough=0.85, coat=0.0)
-    o = v3._obj("ciclorama", bm, m)
+            f = bm.faces.new([rows[r][i], rows[r][i + 1], rows[r + 1][i + 1], rows[r + 1][i]])
+            # material pela altura: chão claro até a metade da curva, parede amarela dali para cima
+            f.material_index = 0 if f.calc_center_median().z < raio * 0.35 else 1
+    chao = v3.vinil("ciclorama_chao", CHAO, rough=0.8, coat=0.0)
+    parede = v3.vinil("ciclorama_parede", FUNDO, rough=0.9, coat=0.0)
+    o = v3._obj("ciclorama", bm, [chao, parede])
     return o
 
 
@@ -99,12 +104,10 @@ def camera(pos, alvo, lens=50):
 def estudio(centro, dist):
     cx, cy, cz = centro
     ciclorama(fundo_y=cy + 4.5)
-    luz_area("key", (cx - dist * 0.55, cy - dist * 0.75, cz + dist * 0.75), centro, 1400 * 0.3 * (dist / 8) ** 2,
-             dist * 0.7, "#FFF6EC")
-    luz_area("fill", (cx + dist * 0.8, cy - dist * 0.55, cz + dist * 0.25), centro, 450 * 0.3 * (dist / 8) ** 2,
-             dist * 0.8, "#E8F0FF")
-    luz_area("rim", (cx + dist * 0.2, cy + dist * 0.7, cz + dist * 0.55), centro, 900 * 0.3 * (dist / 8) ** 2,
-             dist * 0.35, "#FFFFFF")
+    k = LUZ * (dist / 8) ** 2   # mesma iluminação no centro para qualquer distância (carros e motos)
+    luz_area("key", (cx - dist * 0.55, cy - dist * 0.75, cz + dist * 0.75), centro, 700 * k, dist * 0.7, "#FFF6EC")
+    luz_area("fill", (cx + dist * 0.8, cy - dist * 0.55, cz + dist * 0.25), centro, 260 * k, dist * 0.8, "#EEF3FF")
+    luz_area("rim", (cx + dist * 0.2, cy + dist * 0.7, cz + dist * 0.55), centro, 450 * k, dist * 0.35, "#FFFFFF")
 
 
 def render(caminho):
