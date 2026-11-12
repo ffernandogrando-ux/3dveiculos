@@ -407,7 +407,7 @@ def _mats_pessoa(M, roupa, pele, cabelo, camisa, calca):
              "ad_pele_" + pele, pele, rough=0.5, sss=0.08)),
          "cabelo": M["ad_cabelo"] if cabelo == COR["cabelo"] else get("ad_cabelo_" + cabelo, lambda: _tecido(
              "ad_cabelo_" + cabelo, cabelo, rough=0.7))}
-    if roupa == "civil":
+    if roupa in ("civil", "regata"):
         R["camisa"] = get("ad_camisa_" + camisa, lambda: _tecido("ad_camisa_" + camisa, camisa, rough=0.8))
         esc = "#%02X%02X%02X" % tuple(int(int(camisa[i:i + 2], 16) * 0.72) for i in (1, 3, 5))
         R["camisa_esc"] = get("ad_camisa_" + esc, lambda: _tecido("ad_camisa_" + esc, esc, rough=0.8))
@@ -440,13 +440,17 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
     """Mecânico Zé, ~40 anos, 1,79 m. pose: parado | aponta | explica | bracos_cruzados | conta.
     expressao: neutro | sorriso | fala | preocupado | surpreso | bravo | careta | desdem.
     roupa="civil": outra pessoa (o motorista): camisa polo (cor `camisa`), calça jeans (`calca`), tênis.
+    roupa="regata": a mesma pessoa de regata (branca por padrão; `camisa` muda a cor), jeans e tênis.
     pele / cabelo (hex) e corte ("curto" | "alto" | "raspado") mudam a pessoa; barba = força da barba por fazer.
     maos="pose": só as mãos da pose; maos="todas": cria as 4 (relaxada, aponta, aberta, punho) de cada lado e mostra
     as da pose; troque no tempo com mao(Z, "e", "aberta", quadro). Z["maos"][lado][tipo] = lista de objetos."""
     materiais(M)
     pele = pele or COR["pele"]
     cabelo = cabelo or COR["cabelo"]
-    civil = roupa == "civil"
+    civil = roupa in ("civil", "regata")
+    regata = roupa == "regata"
+    if regata and camisa == "#B5452F":
+        camisa = "#F2F1EC"                     # regata branca por padrão
     MP = _mats_pessoa(M, roupa, pele, cabelo, camisa, calca)
     m_pele = MP["pele"]
     root = empty(name)
@@ -481,6 +485,9 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
         Rr = [(0.182, 0.142), (0.18, 0.15), (0.2, 0.145), (0.198, 0.128), (0.07, 0.065),
               (0.074, 0.068), (0.064, 0.06), (0.074, 0.068), (0.064, 0.06)]
         G = ["quadril", "quadril", "tronco", "tronco", "pescoco", "tronco", "ombro_e", "tronco", "ombro_d"]
+        if regata:          # sem manga: só o tronco; ombro e braço de pele (alças implícitas)
+            P, A, Rr, G = P[:5], A[:4], Rr[:5], G[:5]
+            Rr = [(0.182, 0.142), (0.178, 0.148), (0.19, 0.14), (0.17, 0.12), (0.066, 0.062)]
         corpo = skin(name + "_camisa", P, A, Rr, MP["camisa"], parent=root)
         _deforma(corpo, arm, G)
         PJ = [(0, 0, 0.96), (0.1, 0, 0.9), (0.105, 0, 0.72), (0.108, -0.004, 0.5), (0.11, 0.004, 0.33),
@@ -496,6 +503,12 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
         Z["calca"] = calca_o
         # braço (pele) da manga curta até o cotovelo
         for l, s in (("e", 1), ("d", -1)):
+            if regata:          # ombro + braço inteiros de pele, saindo da cava da regata
+                bs = skin(f"{name}_braco_{l}", [(s * 0.17, 0.0, 1.4), (s * 0.205, 0.004, 1.35), (s * 0.228, 0.01, 1.25),
+                                                 (s * 0.245, 0.01, 1.13)], [(0, 1), (1, 2), (2, 3)],
+                          [(0.066, 0.06), (0.068, 0.062), (0.054, 0.052), (0.048, 0.046)], m_pele, parent=root)
+                _deforma(bs, arm, ["tronco", "tronco", f"ombro_{l}", f"cotovelo_{l}"])
+                continue
             bs = skin(f"{name}_braco_{l}", [(s * 0.224, 0.01, 1.3), (s * 0.245, 0.01, 1.13)], [(0, 1)],
                       [(0.05, 0.048), (0.047, 0.045)], m_pele, parent=root)
             _deforma(bs, arm, [f"ombro_{l}", f"cotovelo_{l}"])
@@ -573,19 +586,20 @@ def ze_adulto(name, M, pose="parado", expressao="neutro", olhar=(0.0, 0.0), roup
             _no_osso(bc, arm, f"coxa_{l}")
     else:
         # gola polo (colarinho deitado), carcela com 2 botões, barra da camisa, barra do jeans e tênis
-        tronco.append(skin(name + "_gola", [(-0.07, 0.02, 1.47), (-0.065, -0.04, 1.455), (0, -0.075, 1.425),
-                                             (0.065, -0.04, 1.455), (0.07, 0.02, 1.47)],
-                           [(0, 1), (1, 2), (2, 3), (3, 4)],
-                           [(0.022, 0.009), (0.024, 0.01), (0.026, 0.01), (0.024, 0.01), (0.022, 0.009)],
-                           MP["camisa_esc"]))
-        cr = mt.box(name + "_carcela", -0.016, 0.016, -0.004, 0.004, -0.06, 0.0, MP["camisa_esc"], anchor="center")
-        cr.location = (0, -0.128, 1.4)
-        cr.rotation_euler = (math.radians(-12), 0, 0)
-        _bevel(cr, 0.003)
-        tronco.append(cr)
-        for k in range(2):
-            tronco.append(esfera(f"{name}_botao{k}", 0.0055, (0, -0.134, 1.385 - k * 0.032), MP["botao"],
-                                 scale=(1, 0.5, 1), seg=12))
+        if not regata:
+            tronco.append(skin(name + "_gola", [(-0.07, 0.02, 1.47), (-0.065, -0.04, 1.455), (0, -0.075, 1.425),
+                                                 (0.065, -0.04, 1.455), (0.07, 0.02, 1.47)],
+                               [(0, 1), (1, 2), (2, 3), (3, 4)],
+                               [(0.022, 0.009), (0.024, 0.01), (0.026, 0.01), (0.024, 0.01), (0.022, 0.009)],
+                               MP["camisa_esc"]))
+            cr = mt.box(name + "_carcela", -0.016, 0.016, -0.004, 0.004, -0.06, 0.0, MP["camisa_esc"], anchor="center")
+            cr.location = (0, -0.128, 1.4)
+            cr.rotation_euler = (math.radians(-12), 0, 0)
+            _bevel(cr, 0.003)
+            tronco.append(cr)
+            for k in range(2):
+                tronco.append(esfera(f"{name}_botao{k}", 0.0055, (0, -0.134, 1.385 - k * 0.032), MP["botao"],
+                                     scale=(1, 0.5, 1), seg=12))
         quadril.append(skin(name + "_barra_camisa", [(0, -0.002, 0.915), (0, -0.002, 0.94)], [(0, 1)],
                             [(0.188, 0.148), (0.187, 0.147)], MP["camisa_esc"]))
         for l, x in (("e", 0.112), ("d", -0.112)):
