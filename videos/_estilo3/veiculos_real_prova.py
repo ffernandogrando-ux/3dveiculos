@@ -237,7 +237,7 @@ def cena_tecnico(amostras, escala):
     tc.luz_area("strip_esq", (-3.4, -2.2, 1.5), alvo, 0.30, 4.8, 150, abertura=70)
     tc.luz_area("strip_dir", (3.6, -1.0, 1.5), alvo, 0.30, 4.8, 110, abertura=70)
     tc.luz_area("topo", (-0.6, 0.8, 4.8), alvo, 4.0, 0.35, 14, abertura=60)
-    rim = tc.luz_area("rim", (0.6, 4.0, 3.0), alvo, 4.0, 0.4, 320, abertura=45)
+    rim = tc.luz_area("rim", (0.3, 2.6, 5.4), alvo, 4.0, 0.4, 260, abertura=40)
     rim.visible_diffuse = True
     col = bpy.data.collections.new("alvo_rim_tecnico")
     for o in [D["raiz"]] + list(D["raiz"].children_recursive):
