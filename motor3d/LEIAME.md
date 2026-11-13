@@ -10,6 +10,7 @@ Cada vídeo é uma pasta com dois arquivos próprios; todo o resto vem deste mot
 | `sons.py` | efeitos (biblioteca CC0 em `../biblioteca_sons` + sintetizados) e mixador |
 | `pecas.py` | catálogo de peças reutilizáveis (máquinas, prédio, poço, usina, animais, pessoa, fogo, jornal…) — veja `catalogo.jpg`; `catalogo.py` refaz a imagem |
 | `pecas_esgoto.py` | peças de banheiro/esgoto do vídeo do ralo (vaso em corte, canos em corte com água, ralo, frascos, barata, rede da rua; `cortar_y` corta qualquer peça ao meio) — prévia em `videos/ralo_esgoto/previa_cenario.jpg`. Repete alguns nomes do banheiro de `pecas.py` com outros parâmetros: use um ou outro |
+| `simready.py` | modelos 3D prontos da NVIDIA (SimReady, CC BY 4.0, ~2.700 objetos reais): baixa, importa no estilo lowpoly ou realista e gera o crédito — guia em `SIMREADY.md` |
 | `benchmark.py` | teste comparativo de configurações de render |
 
 ## Fluxo de um vídeo novo

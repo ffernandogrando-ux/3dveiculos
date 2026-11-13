@@ -44,6 +44,7 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
 | `referencias/base_habitos/` | análise do concorrente @construindo3d (feita para o canal de hábitos; é de onde vem o molde) |
 | `roteiros/` | roteiros prontos do canal, com fontes |
 | `motor3d/` | motor 3D (Blender/bpy). `pecas_habitos.py` (mascote Gota, palco micro) é o modelo para o `pecas_veiculos.py` |
+| `motor3d/simready.py` | peças reais de carro da NVIDIA (motor, freio, suspensão, câmbio...; CC BY 4.0, crédito na descrição): guia e lista por tema em `motor3d/SIMREADY.md` |
 | `videos/aterro_sanitario`, `mofo_*`, `ralo_esgoto` | **exemplos técnicos** de cenas prontas do motor (herança do 3Douro, outro formato) |
 | `videos/_estilo_b/` | exemplo de prévia de estilo (`mockup.py` + quadros) feita para o canal de hábitos: modelo para a prévia deste canal |
 | `biblioteca_sons/` | sons CC0 |
