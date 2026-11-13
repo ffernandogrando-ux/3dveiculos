@@ -4,6 +4,10 @@ Este é o **canal de veículos** (carro, moto e, de vez em quando, caminhão, ba
 (casa e obra) **nem o canal de hábitos** (corpo e sono). Reaproveita o motor 3D (`motor3d/`), mas o tema, o tom e o
 estilo visual são próprios.
 
+## Ao retomar ("oi")
+Quando o usuário abrir a sessão só com "oi" (ou parecido), responda com um **resumo curto de onde paramos** (seção
+"Onde paramos", em especial o bloco **ESTADO ATUAL**) e **o próximo passo** sugerido, sem refazer nada antes de ele pedir.
+
 ## Leia antes de qualquer coisa
 - `referencias/01_regras_do_roteiro.md`: as regras do roteiro deste canal.
 - `referencias/02_pautas.md`: as pautas e a ordem dos vídeos.
@@ -113,17 +117,35 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
 - Gemini de imagem (`videos/_desenho/gerar.py`): a chave é do plano gratuito, cota 0 para imagem → precisa
   faturamento ativado pelo usuário.
 
-**Pendente, nesta ordem:**
-1. Lapidar o estilo adulto (Zé menos "manequim", carros sem cara de perua) e o usuário aprovar; aprovar o nome do canal.
-2. Para animar 70 s (apontado pelo revisor): pneu com sulco + `girar_rodas()` com sinal por lado; todas as mãos
-   pré-criadas com troca por `hide_render`; unificar materiais (`boneco` usa mt.mat, `veiculos3` usa vinil());
-   perfil de render de vídeo (720p, 16 amostras) medido em 10 quadros.
-3. Peças de corte no estilo novo: pneu em corte, motor em corte, corrente, raio-X.
-3. Roteiros têm 196–229 palavras (a regra diz 160–190; o roteiro de hábitos "soneca" tem 211 e fecha em ~70 s).
-   Enxugar só se o usuário pedir ou se a narração gravada passar de 75 s.
-4. Roteiro 01: a fonte do Departamento de Energia dos EUA foi citada por reportagens; conferir a página original.
-5. Quando o usuário mandar o .srt de um roteiro: produzir o vídeo (skill `produzir-video-3d`).
-6. Escrever os roteiros 05–10 da ordem em `referencias/02_pautas.md`, sempre com fonte.
+**ESTADO ATUAL (13/11/2026, fim da sessão):**
+- **Estilo aprovado: ESTILO JOGO.** Câmera de terceira pessoa (perseguição do carro → atrás do ombro → closes) +
+  HUD de jogo próprio (barras BOLSO e PNEU, MISSÃO, ✓/✗, "AH, MAS…", "VISÃO RAIO-X") + bairro brasileiro low-poly
+  (casas coloridas, caixa d'água, padaria, fiação) com cor chapada e contorno preto. O usuário gostou do movimento,
+  do HUD e da piada do carro subindo na calçada. Os estilos anteriores (Parafuso, vinil, adulto, papel) são histórico.
+- **Personagem:** "o cara" (`motor3d/personagem_q.py`, corpo Quaternius com animações prontas + mocap CMU): regata
+  branca, jeans, cinto, tênis, cabelo crespo curto, cabeça 1,4×. Original: o usuário pediu várias vezes para ficar
+  parecido com o CJ (GTA) — **não fazer** (cabeça raspada/cavanhaque/rosto do CJ ficam de fora; HUD não copia o do GTA).
+- **Vídeo 02 (calibrar o pneu) PRONTO no estilo jogo:** `videos/calibrar_pneu_jogo/saida/calibrar_pneu_jogo.mp4`
+  (66,2 s). Título sugerido: "Você calibra o pneu no chutinho? 👟🚗"; hashtags #pneu #carro #calibragem
+  #dicasautomotivas #mecanica.
+- **Como produzir o próximo vídeo (receita):** narração .wav do usuário → `faster-whisper` → `palavras.json` →
+  copiar `videos/calibrar_pneu_jogo/cena.py` (cenas de rua com tempos globais, `FAIXAS` = trechos de rua) e
+  `montar.py` (HUD por palavra, whip nas trocas rua ↔ raio-X, efeitos num bus com ducking pela voz, loudness -14 LUFS)
+  → cenas de raio-X com `motor3d/tecnico.py` (ou planos de `videos/calibrar_pneu/planos/_tec.py`). Render: Cycles
+  6 amostras, 576×1024, 2 filas (`cena.py video 0 2` e `video 1 2`, THREADS=2) ≈ 3 s/quadro. **Voz sempre na frente**
+  (pedido do usuário: efeito sonoro não pode abafar a voz).
+- Quadros e MP4 não vão para o git: numa máquina nova é preciso renderizar de novo (inclusive o raio-X de
+  `videos/calibrar_pneu/planos`). Assets livres: `bash scripts/baixar_assets.sh` (Google Drive do Quaternius às vezes
+  dá "quota exceeded"). Gemini de imagem está sem cota (plano gratuito).
 
+**Pendente, nesta ordem:**
+1. Ouvir o feedback do usuário sobre o vídeo 02 no estilo jogo e corrigir.
+2. Lapidar: regata deforma no ombro em gestos; chute duro; close final de cima; trazer o raio-X para o visual
+   chapado (hoje é o técnico escuro realista); carro com mais cara de jogo.
+3. Próximo vídeo: o usuário grava a narração do roteiro 01 (esquentar o carro parado) ou 03 (corrente da moto seca);
+   para a moto falta uma moto no estilo jogo (`veiculos3.moto()` + `chapar_cena`).
+4. Roteiro 01: conferir a página original do Departamento de Energia dos EUA citada como fonte.
+5. Escrever os roteiros 05–10 da ordem em `referencias/02_pautas.md`, sempre com fonte.
+6. Aprovar o nome do canal (`referencias/03_identidade_e_estilo.md` ainda descreve o estilo antigo: atualizar).
 
 Arquivos pesados (.blend, quadros, .wav e .mp4 gerados) não vão para o repositório.
