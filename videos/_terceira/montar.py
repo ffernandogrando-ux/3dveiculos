@@ -100,8 +100,11 @@ for k, (f, t0, v, dur) in enumerate(sons):
     cmd += ["-i", f]
     ms = int(t0 * 1000)
     fc.append(f"[{k + 2}:a]atrim=0:{dur},afade=t=out:st={max(dur - 0.3, 0)}:d=0.3,volume={v},adelay={ms}|{ms}[s{k}]")
-fc.append("[1:a]volume=1.0[nar]")
-fc.append("[nar]" + "".join(f"[s{k}]" for k in range(len(sons))) + f"amix=inputs={len(sons) + 1}:normalize=0,atrim=0:{D}[a]")
+# voz na frente: efeitos somados num bus, mais baixos, e "ducking" (abaixam sozinhos quando a voz fala)
+fc.append("[1:a]volume=1.0,asplit=2[nar][chave]")
+fc.append("".join(f"[s{k}]" for k in range(len(sons))) + f"amix=inputs={len(sons)}:normalize=0,volume=0.6[sfx]")
+fc.append("[sfx][chave]sidechaincompress=threshold=0.02:ratio=8:attack=15:release=250[sfxd]")
+fc.append(f"[nar][sfxd]amix=inputs=2:normalize=0,atrim=0:{D},loudnorm=I=-14:TP=-1.5:LRA=11[a]")
 cmd += ["-filter_complex", ";".join(fc), "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-pix_fmt", "yuv420p",
         "-crf", "19", "-c:a", "aac", "-b:a", "192k", os.path.join(AQUI, "teste_terceira_v2.mp4" if V2 else "teste_terceira.mp4")]
 subprocess.run(cmd, check=True)
