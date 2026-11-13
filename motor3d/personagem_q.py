@@ -208,6 +208,7 @@ def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suaviz
     bm = bmesh.new()
     bm.from_mesh(o.data)
     bm.normal_update()
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)     # costuras de UV do glTF: sem fresta na casca
     fora = [f for f in bm.faces if not dentro(*f.calc_center_median())]
     bmesh.ops.delete(bm, geom=fora, context="FACES")
     soltos = [v for v in bm.verts if not v.link_faces]
@@ -263,7 +264,7 @@ def _cabelo(Q, corte, cor):
     bpy.ops.import_scene.gltf(filepath=CABELO.format(corte))
     hs = [o for o in bpy.data.objects if o not in antes and o.type == "MESH"]
     arm = Q["arm"]
-    m = _mat(Q["nome"] + "_cabelo", cor, rough=0.55, sheen=0.4)
+    m = _mat(Q["nome"] + "_cabelo", cor, rough=0.65, sheen=0.1)
     # mantém o relevo dos fios (normal map do pacote)
     for h in hs:
         for ms in h.data.materials:
@@ -444,7 +445,7 @@ def personagem(tipo="cara", nome=None, cores=None, peca=None):
                 return 0.925 < z < (1.505 if y < 0.03 else 1.525) and ax < 0.35
             cortes = [("z", 0.925), ("x", 0.35), ("z", 1.505)]
         R.append(_casca(corpo, nome + "_camisa", tem,
-                        lambda x, y, z: 0.017 if z < 0.99 else (0.012 if abs(x) > 0.3 else 0.009),
+                        lambda x, y, z: 0.0135 if z < 0.985 else (0.012 if abs(x) > 0.3 else 0.008),
                         cam, cortes=cortes, espessura=0.003))
         R.append(_casca(corpo, nome + "_tenis", lambda x, y, z: z < 0.125,
                         lambda x, y, z: 0.013, sapato, cortes=[("z", 0.125)], espessura=0.004, suavizar=12, sub=1))

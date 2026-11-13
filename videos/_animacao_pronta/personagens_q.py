@@ -14,12 +14,12 @@ sc.view_settings.view_transform = "Standard"
 sc.view_settings.exposure = -0.6
 w = bpy.data.worlds.new("w"); sc.world = w; w.use_nodes = True
 w.node_tree.nodes["Background"].inputs["Color"].default_value = mt.lin("#B9C4CE")
-w.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.9
+w.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.5
 chao = mt.box("chao", -6, 6, -6, 6, -0.01, 0, None)
 m = bpy.data.materials.new("chao"); m.use_nodes = True
 m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = mt.lin("#8E9399")
 chao.data.materials.append(m)
-for pos, e, cor in (((-2.2, -3.0, 3.2), 900, "#FFE8D0"), ((2.6, -2.0, 2.2), 350, "#DCE6FF"), ((0.5, 2.5, 3.0), 500, "#FFFFFF")):
+for pos, e, cor in (((-2.2, -3.0, 3.2), 380, "#FFE8D0"), ((2.6, -2.0, 2.2), 140, "#DCE6FF"), ((0.5, 2.5, 3.0), 220, "#FFFFFF")):
     d = bpy.data.lights.new("a", "AREA"); d.energy, d.size = e, 2.0; d.color = mt.lin(cor)[:3]
     o = mt.link(bpy.data.objects.new("a", d)); o.location = pos
     o.rotation_mode = "QUATERNION"; o.rotation_quaternion = (Vector((0, 0, 1.0)) - Vector(pos)).to_track_quat("-Z", "Y")
@@ -69,7 +69,7 @@ lin1 = [ab(out[0]), ab(out[1]), ab(out[2]), ab(out[3])]
 rost = []
 for nm in ("cara", "ze"):
     for exp in ("sorriso", "bravo", "surpreso"):
-        im = Image.open(os.path.join(AQUI, f"_pq_rosto_{nm}_{exp}.png")).convert("RGB").crop((0, 192, 576, 832)).resize((192, 213))
+        im = Image.open(os.path.join(AQUI, f"_pq_rosto_{nm}_{exp}.png")).convert("RGB").crop((0, 120, 576, 760)).resize((192, 213))
         ImageDraw.Draw(im).text((6, 4), f"{nm}: {exp}", fill=(255, 255, 255))
         rost.append(im)
 folha = Image.new("RGB", (W * 4, 512 + 213 * 2), (24, 24, 24))
