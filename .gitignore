@@ -40,3 +40,8 @@ videos/_terceira/*.mp4
 videos/_terceira/_quadros2/
 videos/_terceira/_final2/
 videos/_terceira/render2.log
+videos/calibrar_pneu_jogo/_quadros/
+videos/calibrar_pneu_jogo/_final/
+videos/calibrar_pneu_jogo/_testes/
+videos/calibrar_pneu_jogo/saida/
+videos/calibrar_pneu_jogo/*.log
