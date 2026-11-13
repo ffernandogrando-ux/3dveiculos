@@ -33,8 +33,8 @@ FPS = 24
 ALTURA_ARQ = 1.81                      # altura do corpo-base no arquivo (m)
 
 TIPOS = {
-    "cara": dict(pele="#A86B4C", cabelo="#1E1510", camisa="#F2F1EC", calca="#3A5A86", sapato="#2B2E35",
-                 sola="#E6E2DA", altura=1.76, corte="Hair_SimpleParted", roupa="civil", peca="regata"),
+    "cara": dict(pele="#A86B4C", cabelo="#16100C", camisa="#F0EEE8", calca="#3F5F8F", sapato="#2B2E35",
+                 sola="#E6E2DA", cinto="#3A2A1E", altura=1.76, corte="crespo", roupa="civil", peca="regata"),
     "ze": dict(pele="#8A5A40", cabelo="#2A1E17", macacao="#1F4E79", detalhe="#E8590C", sapato="#2A211C",
                sola="#151515", altura=1.79, corte="Hair_SimpleParted", roupa="macacao", peca="macacao"),
 }
@@ -72,20 +72,27 @@ def _no(nt, tipo, **kw):
     return n
 
 
+def _rest(nt):
+    """Posição de REPOUSO do ponto (atributo rest_position): a trama e as costuras ficam presas ao pano quando o
+    esqueleto mexe (a coordenada de objeto 'escorregaria' na malha deformada)."""
+    a = _no(nt, "ShaderNodeAttribute", attribute_type="GEOMETRY", attribute_name="rest_position")
+    return a.outputs["Vector"]
+
+
 def _tecido(nome, cor, escala=420.0, contraste=0.12, rough=0.85, tipo="malha"):
     """Tecido com trama fina (por coordenada de objeto, que acompanha a deformação): 'brim' = sarja diagonal do jeans
     com desbotado; 'malha' = camiseta; 'lona' = macacão."""
     m = _mat(nome, cor, rough, sheen=0.25)
     nt = m.node_tree
     b = nt.nodes["Principled BSDF"]
-    tc = _no(nt, "ShaderNodeTexCoord")
+    rp = _rest(nt)
     wv = _no(nt, "ShaderNodeTexWave", wave_type="BANDS", bands_direction="DIAGONAL")
     wv.inputs["Scale"].default_value = escala
     wv.inputs["Distortion"].default_value = 0.5
-    nt.links.new(tc.outputs["Object"], wv.inputs["Vector"])
+    nt.links.new(rp, wv.inputs["Vector"])
     nz = _no(nt, "ShaderNodeTexNoise")
     nz.inputs["Scale"].default_value = 9.0
-    nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+    nt.links.new(rp, nz.inputs["Vector"])
     mx = _no(nt, "ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
     mx.inputs["Factor"].default_value = contraste * (1.6 if tipo == "brim" else 1.0)
     mx.inputs[6].default_value = _lin(cor)
@@ -116,9 +123,8 @@ def _costura(m, regioes, cor="#C9963A", largura=0.0022):
     e elipses simples: ("ret", x0, x1, z0, z1, lado_y) e ("hz", z, lado_y) (linha horizontal)."""
     nt = m.node_tree
     b = nt.nodes["Principled BSDF"]
-    tc = _no(nt, "ShaderNodeTexCoord")
     sp = _no(nt, "ShaderNodeSeparateXYZ")
-    nt.links.new(tc.outputs["Object"], sp.inputs[0])
+    nt.links.new(_rest(nt), sp.inputs[0])
     X, Y, Z = sp.outputs[0], sp.outputs[1], sp.outputs[2]
 
     def op(o, a, bb=None):
@@ -196,10 +202,13 @@ def _afinar(o):
     o.data.update()
 
 
-def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suavizar=0, sub=1, projetar=None):
+def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suavizar=0, sub=1, projetar=None,
+          forma=None, vies=None, alisar=4, atributos=None):
     """Roupa = cópia do corpo com só as faces de `dentro(x,y,z)`, empurrada `desloc(x,y,z)` (m) pela normal; as
     bordas abertas são niveladas nos planos `cortes` [("z", 0.99), ("x", 0.36)...] (borda reta, sem serrilhado) e
-    a espessura vem do Solidify. Mesmos grupos de vértices + Armature do corpo → deforma igual."""
+    a espessura vem do Solidify. Mesmos grupos de vértices + Armature do corpo → deforma igual.
+    forma(bm): remodela os vértices (ex.: caimento reto); vies=(largura, alto): faixa junto às bordas levantada
+    `alto` m (viés/ribana/cós/barra) e marcada no atributo "vies"; atributos={nome: f(co)→(r,g,b)} por vértice."""
     o = corpo.copy()
     o.data = corpo.data.copy()
     o.name = o.data.name = nome
@@ -217,6 +226,9 @@ def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suaviz
     novo = {v: v.co + v.normal * desloc(*v.co) for v in bm.verts}
     for v, c in novo.items():
         v.co = c
+    if forma:
+        forma(bm)
+        bm.normal_update()
     borda = [v for v in bm.verts if v.is_boundary]
     for v in borda:
         if projetar is not None:
@@ -235,15 +247,39 @@ def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suaviz
                 v.co[i] = math.copysign(val, v.co[i]) if i == 0 else val
     # borda lisa: média com os vizinhos de borda (tira o serrilhado das faces cortadas)
     viz = {v: [e.other_vert(v) for e in v.link_edges if e.is_boundary] for v in borda}
-    for _ in range(4):
+    for _ in range(alisar):
         novo = {v: (v.co * 2 + sum((u.co for u in viz[v]), Vector())) / (2 + len(viz[v])) for v in borda if viz[v]}
         for v, c in novo.items():
             v.co = c
         if projetar is not None:
             for v in borda:
                 v.co = projetar(v.co.copy())
+    dist = _dist_borda(bm, borda)
+    fv = {}
+    if vies:
+        larg, alto = vies
+        bm.normal_update()
+        for v in bm.verts:
+            d = dist.get(v, 9.0)
+            k = 1.0 if d < larg * 0.7 else max(0.0, 1 - (d - larg * 0.7) / (larg * 0.3))
+            fv[v.index] = k
+            if k > 0:
+                v.co += v.normal * alto * k
+    attrs = dict(atributos or {})
+    co_rep = {v.index: v.co.copy() for v in bm.verts}
+    dist_i = {v.index: dist.get(v, 9.0) for v in bm.verts}
     bm.to_mesh(o.data)
     bm.free()
+    a = o.data.color_attributes.new("vies", "FLOAT_COLOR", "POINT")
+    for i in range(len(o.data.vertices)):
+        k = fv.get(i, 0.0)
+        a.data[i].color = (k, min(dist_i[i] / 0.03, 1.0), 0.0, 1.0)
+    for nm, f in attrs.items():
+        a = o.data.color_attributes.new(nm, "FLOAT_COLOR", "POINT")
+        for i in range(len(o.data.vertices)):
+            r, g, b = f(co_rep[i])
+            a.data[i].color = (r, g, b, 1.0)
+    o.add_rest_position_attribute = True
     o.data.materials.clear()
     o.data.materials.append(mat)
     for p in o.data.polygons:
@@ -270,6 +306,25 @@ def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suaviz
         sd = o.modifiers.new("sub", "SUBSURF")
         sd.levels = sd.render_levels = sub
     return o
+
+
+def _dist_borda(bm, borda):
+    """Distância (m, ao longo das arestas) de cada vértice até a borda aberta mais próxima (Dijkstra)."""
+    import heapq
+    d = {v: 0.0 for v in borda}
+    fila = [(0.0, v.index, v) for v in borda]
+    heapq.heapify(fila)
+    while fila:
+        dv, _, v = heapq.heappop(fila)
+        if dv > d.get(v, 9.0) or dv > 0.08:
+            continue
+        for e in v.link_edges:
+            u = e.other_vert(v)
+            nd = dv + e.calc_length()
+            if nd < d.get(u, 9.0):
+                d[u] = nd
+                heapq.heappush(fila, (nd, u.index, u))
+    return d
 
 
 def _cabelo(Q, corte, cor):
@@ -317,7 +372,6 @@ def _rosto(Q, cores, expressao="neutro"):
     alinhados aos da cabeça Quaternius). A borda some em degradê (alfa) sobre a pele de mesma cor."""
     from mathutils.bvhtree import BVHTree
     corpo, arm, nome = Q["corpo"], Q["arm"], Q["nome"]
-    dg = bpy.context.evaluated_depsgraph_get()
     alvos = [corpo] + [o for o in Q["malhas"] if o.name.startswith("Eyes")]
     arvores = []
     for o in alvos:
@@ -380,6 +434,12 @@ def _rosto(Q, cores, expressao="neutro"):
     for n in nt.nodes:
         if n.type == "TEX_COORD":
             n.object = ref
+    # sobrancelha mais fina: a 1ª divisão por 0,0055 do material é a espessura dela (a 2ª é a do lábio)
+    for n in nt.nodes:
+        if n.type == "MATH" and n.operation == "DIVIDE" and abs(n.inputs[1].default_value - 0.0055) < 1e-6 \
+                and not n.inputs[1].links:
+            n.inputs[1].default_value = cores.get("sobr_esp", 0.0036)
+            break
     out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
     bs = out.inputs["Surface"].links[0].from_socket
     tr = nt.nodes.new("ShaderNodeBsdfTransparent")
@@ -399,6 +459,402 @@ def _rosto(Q, cores, expressao="neutro"):
     Q["rosto"] = V
     Q["rosto_obj"] = ob
     return V
+
+
+# ===================================================================== roupa do "cara" (v2)
+def _liso(v, a, b):
+    t = min(max((v - a) / (b - a), 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+# eixo de cada perna em repouso (quadril → joelho → tornozelo), lado +x; o -x é o espelho
+_PERNA = [(0.97, 0.104, 0.04), (0.542, 0.114, 0.036), (0.086, 0.114, 0.088)]
+
+
+def _eixo_perna(z, sx):
+    (z0, x0, y0), (z1, x1, y1), (z2, x2, y2) = _PERNA
+    if z >= z1:
+        t = (z - z1) / (z0 - z1)
+        return sx * (x1 + (x0 - x1) * t), y1 + (y0 - y1) * t
+    t = max((z - z2) / (z1 - z2), 0.0)
+    return sx * (x2 + (x1 - x2) * t), y2 + (y1 - y2) * t
+
+
+def _ang_perna(co):
+    """(cos, sin, 1) do ângulo em volta do eixo da perna (0 = lado de fora; sin<0 = frente); (0,0,0) fora das pernas."""
+    if co.z > 0.78:
+        return (0.0, 0.0, 0.0)
+    sx = 1 if co.x >= 0 else -1
+    cx, cy = _eixo_perna(co.z, sx)
+    dx, dy = (co.x - cx) * sx, co.y - cy
+    r = math.hypot(dx, dy) or 1.0
+    return (dx / r, dy / r, 1.0)
+
+
+def _forma_calca(bm):
+    """Corte reto, um pouco folgado: da coxa para baixo o pano não acompanha a perna (raio mínimo ~7,4 cm)."""
+    for v in bm.verts:
+        z = v.co.z
+        w = 1 - _liso(z, 0.62, 0.76)
+        if w <= 0:
+            continue
+        sx = 1 if v.co.x >= 0 else -1
+        cx, cy = _eixo_perna(z, sx)
+        d = Vector((v.co.x - cx, v.co.y - cy, 0))
+        r = d.length
+        if r < 1e-5:
+            continue
+        alvo = 0.074 + 0.012 * _liso(z, 0.5, 0.74)
+        if r < alvo:
+            novo = d.normalized() * (r + (alvo - r) * w)
+            v.co.x, v.co.y = cx + novo.x, cy + novo.y
+
+
+def _forma_regata(bm):
+    """Caimento reto: do peito ao quadril o pano desce numa elipse (largura/profundidade do peito, ou do quadril +
+    cinto se for maior) com pequenas dobras verticais, em vez de colar no abdome."""
+    vs = list(bm.verts)
+    peito = [v.co for v in vs if 1.22 < v.co.z < 1.28 and abs(v.co.x) < 0.2]
+    if not peito:
+        return
+    a = max(abs(c.x) for c in peito)
+    yf, yb = min(c.y for c in peito), max(c.y for c in peito)
+    a = max(a, 0.185)
+    yf, yb = min(yf, -0.135), max(yb, 0.135)
+    yc, b = (yf + yb) / 2, (yb - yf) / 2
+    for v in vs:
+        z = v.co.z
+        w = 1 - _liso(z, 1.18, 1.28)
+        if w <= 0 or abs(v.co.x) > 0.25:
+            continue
+        dx, dy = v.co.x, v.co.y - yc
+        th = math.atan2(dy, dx)
+        re = 1.0 / math.sqrt((math.cos(th) / a) ** 2 + (math.sin(th) / b) ** 2)
+        re *= 1 + 0.03 * (1 - _liso(z, 0.98, 1.2)) + 0.012 * math.sin(th * 11 + 0.7) * (1 - _liso(z, 1.0, 1.25))
+        r = math.hypot(dx, dy)
+        re = r + (re - r) * 0.55                  # leve folga, sem virar saco
+        if r < re:
+            k = (r + (re - r) * w) / r
+            v.co.x, v.co.y = dx * k, yc + dy * k
+
+
+def _acabamento(o, mat, raio=0.0042, lados=8, alisar=12, so_z_acima=None):
+    """Viés/ribana: tubo liso seguindo cada borda aberta da casca `o` (esconde qualquer serrilhado do corte), com os
+    pesos do vértice de borda mais próximo (deforma junto). so_z_acima: só as bordas acima dessa altura."""
+    me = o.data
+    viz = {}
+    cont = {}
+    for p in me.polygons:
+        for k in p.edge_keys:
+            cont[k] = cont.get(k, 0) + 1
+    for (a, b), n in cont.items():
+        if n == 1:
+            viz.setdefault(a, []).append(b)
+            viz.setdefault(b, []).append(a)
+    feitos, lacos = set(), []
+    for v0 in viz:
+        if v0 in feitos:
+            continue
+        laco, ant, cur = [v0], None, v0
+        feitos.add(v0)
+        while True:
+            nx = [u for u in viz[cur] if u != ant and u not in feitos]
+            if not nx:
+                break
+            ant, cur = cur, nx[0]
+            laco.append(cur)
+            feitos.add(cur)
+        if len(laco) > 4:
+            lacos.append(laco)
+    co = [v.co.copy() for v in me.vertices]
+    vs, fs, origem = [], [], []
+    for laco in lacos:
+        if so_z_acima is not None and max(co[i].z for i in laco) < so_z_acima:
+            continue
+        P = [co[i].copy() for i in laco]
+        n = len(P)
+        for _ in range(alisar):
+            P = [(P[(k - 1) % n] + P[k] * 2 + P[(k + 1) % n]) / 4 for k in range(n)]
+        base = len(vs)
+        for k in range(n):
+            t = (P[(k + 1) % n] - P[(k - 1) % n]).normalized()
+            u = t.orthogonal().normalized()
+            w = t.cross(u)
+            for j in range(lados):
+                a = 2 * math.pi * j / lados
+                vs.append(P[k] + (u * math.cos(a) + w * math.sin(a)) * raio)
+                origem.append(laco[k])
+        for k in range(n):
+            k2 = (k + 1) % n
+            for j in range(lados):
+                j2 = (j + 1) % lados
+                fs.append([base + k * lados + j, base + k2 * lados + j, base + k2 * lados + j2, base + k * lados + j2])
+    if not vs:
+        return None
+    tm = bpy.data.meshes.new(o.name + "_vies")
+    tm.from_pydata(vs, [], fs)
+    for p in tm.polygons:
+        p.use_smooth = True
+    t = bpy.data.objects.new(o.name + "_vies", tm)
+    for c in o.users_collection:
+        c.objects.link(t)
+    t.parent = o.parent
+    t.matrix_world = o.matrix_world.copy()
+    grupos = {g.index: t.vertex_groups.new(name=g.name) for g in o.vertex_groups}
+    for i, src in enumerate(origem):
+        for g in me.vertices[src].groups:
+            grupos[g.group].add([i], g.weight, "REPLACE")
+    am = t.modifiers.new("Armature", "ARMATURE")
+    am.object = next(m.object for m in o.modifiers if m.type == "ARMATURE")
+    t.add_rest_position_attribute = True
+    tm.materials.append(mat)
+    return t
+
+
+def _regata(corpo, nome, cor):
+    def gola(ax, y):
+        return (1.497 + 0.03 * (ax / 0.085) ** 2) if y < 0.03 else (1.525 + 0.012 * (ax / 0.085) ** 2)
+
+    def cava(z):
+        return 0.192 - (z - 1.30) * 0.16
+
+    def tem(x, y, z):
+        ax = abs(x)
+        if not (0.972 < z < 1.6) or ax > 0.3:
+            return False
+        if z > 1.29 and ax > cava(z):
+            return False
+        return not (ax < 0.085 and z > gola(ax, y))
+
+    def projetar(c):
+        ax, sx = abs(c.x), (1 if c.x >= 0 else -1)
+        if c.z < 1.15:
+            c.z = 0.972
+            return c
+        dg = abs(c.z - gola(min(ax, 0.085), c.y)) if ax < 0.105 else 9.0
+        dc = abs(ax - cava(c.z)) if c.z > 1.27 else 9.0
+        if dg <= dc and dg < 9:
+            c.z = gola(min(ax, 0.085), c.y)
+        elif dc < 9:
+            c.x = sx * cava(c.z)
+        return c
+
+    m = _tecido(nome + "_m", cor, escala=900, contraste=0.05)
+    nt = m.node_tree
+    b = nt.nodes["Principled BSDF"]
+    # ribana: faixa da borda um pouco mais escura e com canelado vertical
+    ca = _no(nt, "ShaderNodeVertexColor", layer_name="vies")
+    sp = _no(nt, "ShaderNodeSeparateColor")
+    nt.links.new(ca.outputs["Color"], sp.inputs[0])
+    mx = _no(nt, "ShaderNodeMix", data_type="RGBA")
+    nt.links.new(b.inputs["Base Color"].links[0].from_socket, mx.inputs[6])
+    mx.inputs[7].default_value = _lin("#E2DFD6")
+    nt.links.new(sp.outputs[0], mx.inputs["Factor"])
+    nt.links.new(mx.outputs[2], b.inputs["Base Color"])
+    o = _casca(corpo, nome, tem, lambda x, y, z: 0.009 if abs(x) > 0.16 and z > 1.3 else 0.008, m,
+               espessura=0.003, projetar=projetar, forma=_forma_regata, alisar=10, vies=(0.035, 0.006))
+    rib = _tecido(nome + "_ribana", "#E6E3DB", escala=1600, contraste=0.10)
+    return [o, _acabamento(o, rib, raio=0.0045, so_z_acima=1.2)]
+
+
+def _jeans(corpo, nome, cor):
+    m = _tecido(nome + "_m", cor, escala=560, tipo="brim")
+    nt = m.node_tree
+    b = nt.nodes["Principled BSDF"]
+    sp = _no(nt, "ShaderNodeSeparateXYZ")
+    nt.links.new(_rest(nt), sp.inputs[0])
+    X, Y, Z = sp.outputs[0], sp.outputs[1], sp.outputs[2]
+    an = _no(nt, "ShaderNodeSeparateColor")
+    nt.links.new(_no(nt, "ShaderNodeVertexColor", layer_name="perna").outputs["Color"], an.inputs[0])
+    CS, SN, PE = an.outputs[0], an.outputs[1], an.outputs[2]
+    vi = _no(nt, "ShaderNodeSeparateColor")
+    nt.links.new(_no(nt, "ShaderNodeVertexColor", layer_name="vies").outputs["Color"], vi.inputs[0])
+    VI = vi.outputs[0]
+
+    def op(o, a, bb=None):
+        n = _no(nt, "ShaderNodeMath", operation=o)
+        for i, x in enumerate((a, bb)):
+            if x is None:
+                continue
+            if isinstance(x, (int, float)):
+                n.inputs[i].default_value = x
+            else:
+                nt.links.new(x, n.inputs[i])
+        return n.outputs[0]
+
+    def faixa(v, c, w):                       # 1 onde |v - c| < w
+        return op("LESS_THAN", op("ABSOLUTE", op("SUBTRACT", v, c)), w)
+
+    def e(*ms):
+        r = ms[0]
+        for x in ms[1:]:
+            r = op("MULTIPLY", r, x)
+        return r
+
+    def ou(*ms):
+        r = ms[0]
+        for x in ms[1:]:
+            r = op("MAXIMUM", r, x)
+        return r
+
+    AX = op("ABSOLUTE", X)
+    frente, tras = op("LESS_THAN", Y, 0.02), op("GREATER_THAN", Y, 0.04)
+    # costura lateral (escura) e pesponto ao lado (mostarda)
+    lado = e(PE, op("LESS_THAN", op("ABSOLUTE", SN), 0.035), op("GREATER_THAN", CS, 0.0))
+    pesp_lado = e(PE, faixa(SN, -0.07, 0.012), op("GREATER_THAN", CS, 0.0))
+    dentro_perna = e(PE, op("LESS_THAN", op("ABSOLUTE", SN), 0.03), op("LESS_THAN", CS, 0.0))
+    # bolso da frente: abertura curva
+    d = op("SQRT", op("ADD", op("POWER", op("DIVIDE", op("SUBTRACT", AX, 0.178), 0.07), 2.0),
+                      op("POWER", op("DIVIDE", op("SUBTRACT", Z, 0.985), 0.085), 2.0)))
+    bolso_f = e(faixa(d, 1.0, 0.035), frente, op("GREATER_THAN", AX, 0.1), op("GREATER_THAN", Z, 0.89))
+    bolso_f2 = e(faixa(d, 1.12, 0.03), frente, op("GREATER_THAN", AX, 0.1), op("GREATER_THAN", Z, 0.89))
+    # braguilha (J) e costura do gancho
+    brag = e(frente, ou(e(faixa(X, 0.03, 0.0018), op("GREATER_THAN", Z, 0.83), op("LESS_THAN", Z, 0.95)),
+                        e(faixa(op("SQRT", op("ADD", op("POWER", op("SUBTRACT", X, 0.0), 2.0),
+                                                     op("POWER", op("SUBTRACT", Z, 0.83), 2.0))), 0.03, 0.0018),
+                          op("LESS_THAN", Z, 0.83), op("GREATER_THAN", X, 0.0))))
+    gancho = e(faixa(X, 0.0, 0.0022), op("GREATER_THAN", Z, 0.7), op("LESS_THAN", Z, 0.95))
+    # bolsos de trás (retângulo com fundo em ponta) e pala
+    zb = op("SUBTRACT", 0.835, op("MULTIPLY", op("ABSOLUTE", op("SUBTRACT", AX, 0.087)), 0.35))
+    dentro_b = e(tras, op("GREATER_THAN", AX, 0.035), op("LESS_THAN", AX, 0.139), op("GREATER_THAN", Z, zb),
+                 op("LESS_THAN", Z, 0.925))
+    dentro_b2 = e(tras, op("GREATER_THAN", AX, 0.039), op("LESS_THAN", AX, 0.135), op("GREATER_THAN", Z, op("ADD", zb, 0.004)),
+                  op("LESS_THAN", Z, 0.921))
+    bolso_t = op("SUBTRACT", dentro_b, dentro_b2)
+    pala = e(tras, faixa(Z, op("SUBTRACT", 0.945, op("MULTIPLY", AX, 0.12)), 0.0018))
+    escuro = ou(lado, dentro_perna, gancho)
+    mostarda = ou(pesp_lado, bolso_f, bolso_f2, brag, bolso_t, pala,
+                  e(VI, faixa(Z, 0.938, 0.0015)), e(VI, faixa(Z, 0.14, 0.0015)))
+    # desbotado: frente das coxas e joelhos (+ ruído)
+    fr = e(PE, op("LESS_THAN", SN, -0.2))
+    gz = lambda c, w: op("EXPONENT", op("MULTIPLY", op("POWER", op("DIVIDE", op("SUBTRACT", Z, c), w), 2.0), -1.0))
+    nz = _no(nt, "ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 30.0
+    nt.links.new(_rest(nt), nz.inputs["Vector"])
+    desb = e(fr, ou(gz(0.7, 0.09), op("MULTIPLY", gz(0.5, 0.045), 0.85)),
+             op("ADD", 0.35, op("MULTIPLY", nz.outputs["Fac"], 0.8)))
+    barra = e(VI, op("LESS_THAN", Z, 0.5))               # barra dobrada: avesso do brim, mais claro
+    cor_in = b.inputs["Base Color"].links[0].from_socket
+    c = cor_in
+    for msk, h, k in ((desb, "#86A3C8", 0.55), (barra, "#6E8CB8", 1.0), (escuro, "#26364F", 0.7),
+                      (mostarda, "#C9963A", 1.0)):
+        mx = _no(nt, "ShaderNodeMix", data_type="RGBA")
+        nt.links.new(c, mx.inputs[6])
+        mx.inputs[7].default_value = _lin(h)
+        nt.links.new(op("MINIMUM", op("MULTIPLY", msk, k), 1.0), mx.inputs["Factor"])
+        c = mx.outputs[2]
+    nt.links.new(c, b.inputs["Base Color"])
+    return _casca(corpo, nome, lambda x, y, z: 0.105 < z < 0.99 and abs(x) < 0.3,
+                  lambda x, y, z: 0.010 if z > 0.94 else 0.008, m, cortes=[("z", 0.99), ("z", 0.105)],
+                  espessura=0.004, forma=_forma_calca, vies=(0.04, 0.0035), atributos={"perna": _ang_perna})
+
+
+def _cinto(Q, corpo, nome, cor="#3A2A1E", jeans_cor="#3F5F8F"):
+    """Cinto de couro com espessura sobre o cós, 5 passantes de brim por cima e fivela retangular metálica."""
+    couro = _mat(nome + "_couro", cor, rough=0.45)
+    bt = couro.node_tree.nodes["Principled BSDF"]
+    if "Coat Weight" in bt.inputs:
+        bt.inputs["Coat Weight"].default_value = 0.15
+    R = [_casca(corpo, nome + "_cinto", lambda x, y, z: 0.948 < z < 0.982 and abs(x) < 0.3,
+                lambda x, y, z: 0.0175, couro, cortes=[("z", 0.982), ("z", 0.948)], espessura=0.005, sub=1)]
+    ps = [(0.105, -1), (0.175, -1), (0.07, 1), (0.0, 1)]
+
+    def passante(x, y, z):
+        if not (0.94 < z < 0.988):
+            return False
+        for px, lado in ps:
+            if abs(abs(x) - px) < 0.0075 and (y * lado > 0.0) and not (px == 0.0 and abs(x) > 0.0075):
+                return True
+        return False
+
+    brim = _tecido(nome + "_passante", jeans_cor, escala=560, tipo="brim")
+    R.append(_casca(corpo, nome + "_passantes", passante, lambda x, y, z: 0.0235, brim,
+                    cortes=[("z", 0.94), ("z", 0.988)], espessura=0.003, sub=1))
+    # fivela: moldura retangular (4 barras) + pino, presa ao osso pelvis, na frente do cinto
+    cinto = R[0]
+    fr = min((v.co for v in cinto.data.vertices if abs(v.co.x) < 0.015 and 0.955 < v.co.z < 0.975),
+             key=lambda c: c.y)
+    metal = _mat(nome + "_metal", "#B9B6AE", rough=0.3)
+    metal.node_tree.nodes["Principled BSDF"].inputs["Metallic"].default_value = 1.0
+    w, h, t, e = 0.052, 0.042, 0.006, 0.0065
+    bm = bmesh.new()
+    for cx, cz, sx, sz in ((0, h / 2 - t / 2, w, t), (0, -h / 2 + t / 2, w, t), (-w / 2 + t / 2, 0, t, h),
+                           (w / 2 - t / 2, 0, t, h), (-0.004, 0, 0.003, h - t)):
+        r = bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.scale(bm, vec=(sx, e, sz), verts=r["verts"])
+        bmesh.ops.translate(bm, vec=(cx, 0, cz), verts=r["verts"])
+    me = bpy.data.meshes.new(nome + "_fivela")
+    bm.to_mesh(me)
+    bm.free()
+    fv = bpy.data.objects.new(nome + "_fivela", me)
+    for c in corpo.users_collection:
+        c.objects.link(fv)
+    me.materials.append(metal)
+    bv = fv.modifiers.new("chanfro", "BEVEL")
+    bv.width, bv.segments = 0.0012, 2
+    fv.location = (0, fr.y - 0.007, 0.965)
+    bpy.context.view_layer.update()
+    _no_osso(fv, Q["arm"], "pelvis")
+    R.append(fv)
+    return R
+
+
+def _cabelo_crespo(Q, corpo, cor, pele):
+    """Cabelo crespo curto: casca do couro cabeludo com volume no topo (até ~2 cm) e degradê nas laterais e nuca
+    (a casca fica rente e semitransparente perto da borda, misturando com a pele). Relevo de cachos miúdos."""
+    def linha(x, y):
+        ax = abs(x)
+        if y < -0.045:
+            zh = 1.752
+        else:
+            zh = 1.752 - (y + 0.045) / 0.145 * 0.125
+        if ax > 0.068 and y < 0.05:
+            zh = max(zh, 1.728)                  # acima das orelhas
+        return zh
+
+    def tem(x, y, z):
+        return z > linha(x, y) and z > 1.6
+
+    def desloc(x, y, z):
+        return 0.0025 + 0.017 * _liso(z, 1.735, 1.80) * (1 - 0.4 * _liso(abs(x), 0.04, 0.09))
+
+    m = bpy.data.materials.new(Q["nome"] + "_cabelo")
+    m.use_nodes = True
+    nt = m.node_tree
+    b = nt.nodes["Principled BSDF"]
+    b.inputs["Roughness"].default_value = 0.85
+    vo = _no(nt, "ShaderNodeTexVoronoi")
+    vo.inputs["Scale"].default_value = 420.0
+    nt.links.new(_rest(nt), vo.inputs["Vector"])
+    nz = _no(nt, "ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 1400.0
+    nt.links.new(_rest(nt), nz.inputs["Vector"])
+    bp = _no(nt, "ShaderNodeBump")
+    bp.inputs["Strength"].default_value = 0.6
+    bp.inputs["Distance"].default_value = 0.002
+    nt.links.new(vo.outputs["Distance"], bp.inputs["Height"])
+    nt.links.new(bp.outputs["Normal"], b.inputs["Normal"])
+    ca = _no(nt, "ShaderNodeVertexColor", layer_name="vies")
+    sp = _no(nt, "ShaderNodeSeparateColor")
+    nt.links.new(ca.outputs["Color"], sp.inputs[0])           # G = distância da borda (0..1 em 3 cm)
+    mx = _no(nt, "ShaderNodeMix", data_type="RGBA")
+    mx.inputs[6].default_value = _lin("#3A2820")
+    mx.inputs[7].default_value = _lin(cor)
+    nt.links.new(nz.outputs["Fac"], mx.inputs["Factor"])
+    nt.links.new(mx.outputs[2], b.inputs["Base Color"])
+    tr = _no(nt, "ShaderNodeBsdfTransparent")
+    ms = _no(nt, "ShaderNodeMixShader")
+    al = _no(nt, "ShaderNodeMapRange")
+    al.inputs["To Min"].default_value = 0.25
+    nt.links.new(sp.outputs[1], al.inputs["Value"])
+    nt.links.new(al.outputs[0], ms.inputs[0])
+    nt.links.new(tr.outputs[0], ms.inputs[1])
+    nt.links.new(b.outputs[0], ms.inputs[2])
+    out = nt.nodes["Material Output"]
+    nt.links.new(ms.outputs[0], out.inputs["Surface"])
+    o = _casca(corpo, Q["nome"] + "_cabelo", tem, desloc, m, espessura=0.002, alisar=6, sub=1)
+    o.modifiers.remove(o.modifiers["espessura"])
+    return [o]
 
 
 # ===================================================================== personagem
@@ -434,46 +890,16 @@ def personagem(tipo="cara", nome=None, cores=None, peca=None):
     R = []
     sapato = _mat(nome + "_sapato", C["sapato"], rough=0.6)
     if C["roupa"] == "civil":
-        jeans = _tecido(nome + "_jeans", C["calca"], escala=520, tipo="brim")
-        _costura(jeans, [("ret", 0.035, 0.135, 0.845, 0.945, 1),      # bolsos de trás
-                         ("hz", 0.94, 0), ("hz", 0.115, 0)], cor="#C9963A")
-        R.append(_casca(corpo, nome + "_calca",
-                        lambda x, y, z: 0.105 < z < 0.975 and abs(x) < 0.3,
-                        lambda x, y, z: 0.010 if z > 0.94 else (0.012 if z < 0.17 else 0.0075),
-                        jeans, cortes=[("z", 0.975), ("z", 0.105)], espessura=0.004))
-        cam = _tecido(nome + "_camisa", C["camisa"], escala=700, contraste=0.08)
+        R.append(_jeans(corpo, nome + "_calca", C["calca"]))
+        R += _cinto(Q, corpo, nome, C.get("cinto", "#3A2A1E"), C["calca"])
         if C["peca"] == "regata":
-            def tem(x, y, z):
-                ax = abs(x)
-                if not (0.925 < z < 1.54) or ax > 0.3:
-                    return False
-                if z > 1.30 and ax > 0.205 - (z - 1.30) * 0.30:
-                    return False                    # cava
-                corte = (1.39 + 0.13 * (ax / 0.1) ** 2) if y < 0.03 else (1.47 + 0.05 * (ax / 0.1) ** 2)
-                return z < corte
-            cortes = [("z", 0.925)]
-
-            def projetar(c):
-                ax, sx = abs(c.x), (1 if c.x >= 0 else -1)
-                if c.z < 1.1:
-                    c.z = 0.925
-                    return c
-                zc = (1.39 + 0.13 * (min(ax, 0.1) / 0.1) ** 2) if c.y < 0.03 else (1.47 + 0.05 * (min(ax, 0.1) / 0.1) ** 2)
-                xc = 0.205 - (c.z - 1.30) * 0.30
-                if ax < 0.095 and abs(c.z - zc) < 0.05:
-                    c.z = zc                          # gola em U
-                elif c.z > 1.28 and ax > 0.1:
-                    c.x = sx * max(xc, 0.1)           # cava
-                return c
+            R += _regata(corpo, nome + "_camisa", C["camisa"])
         else:
-            projetar = None
-            def tem(x, y, z):
-                ax = abs(x)
-                return 0.925 < z < (1.505 if y < 0.03 else 1.525) and ax < 0.35
-            cortes = [("z", 0.925), ("x", 0.35), ("z", 1.505)]
-        R.append(_casca(corpo, nome + "_camisa", tem,
-                        lambda x, y, z: 0.021 if z < 0.985 else (0.012 if abs(x) > 0.3 else 0.008),
-                        cam, cortes=cortes, espessura=0.003, projetar=projetar))
+            cam = _tecido(nome + "_camisa", C["camisa"], escala=700, contraste=0.08)
+            R.append(_casca(corpo, nome + "_camisa",
+                            lambda x, y, z: 0.972 < z < (1.505 if y < 0.03 else 1.525) and abs(x) < 0.35,
+                            lambda x, y, z: 0.008, cam, cortes=[("z", 0.972), ("x", 0.35), ("z", 1.505)],
+                            espessura=0.003, forma=_forma_regata, vies=(0.012, 0.002)))
         R.append(_casca(corpo, nome + "_tenis", lambda x, y, z: z < 0.125,
                         lambda x, y, z: 0.016, sapato, cortes=[("z", 0.125)], espessura=0.004, suavizar=8, sub=1))
         _costura(sapato, [("hz", 0.022, 0)], cor=C["sola"], largura=0.044)    # sola clara (faixa até 2,2 cm)
@@ -491,14 +917,26 @@ def personagem(tipo="cara", nome=None, cores=None, peca=None):
     Q["roupas"] = R
     # esconde o corpo onde a roupa cobre tudo (o dedo do pé ou o joelho não atravessa o tênis/jeans ao dobrar)
     if C["roupa"] == "civil":
-        coberto = lambda x, y, z: z < 0.93 and abs(x) < 0.3
+        def coberto(x, y, z):
+            ax = abs(x)
+            if z < 0.93 and ax < 0.3:
+                return True
+            if C["peca"] == "regata" and 0.9 < z < 1.6 and ax < 0.3:       # sob a regata, longe das bordas
+                gola = (1.497 + 0.03 * (min(ax, 0.085) / 0.085) ** 2) if y < 0.03 else 1.525
+                if z > 1.27 and ax > 0.192 - (z - 1.30) * 0.16 - 0.012:
+                    return False
+                return z < gola - 0.012
+            return False
     else:
         coberto = lambda x, y, z: z < 1.42 and abs(x) < 0.25
     vg = corpo.vertex_groups.new(name="_coberto")
     vg.add([v.index for v in corpo.data.vertices if coberto(*v.co)], 1.0, "REPLACE")
     mk = corpo.modifiers.new("esconde", "MASK")
     mk.vertex_group, mk.invert_vertex_group = "_coberto", True
-    Q["cabelo"] = _cabelo(Q, C["corte"], C["cabelo"])
+    if C["corte"] == "crespo":
+        Q["cabelo"] = _cabelo_crespo(Q, corpo, C["cabelo"], C["pele"])
+    else:
+        Q["cabelo"] = _cabelo(Q, C["corte"], C["cabelo"])
     _rosto(Q, C)
     s = C["altura"] / ALTURA_ARQ
     Q["raiz"].scale = (s, s, s)
@@ -530,7 +968,7 @@ VERBOS = {
     "sim": ("ual", "Yes", False),
     "mexer": ("ual", "Fixing_Kneeling", False),
     "chutar": ("cmu", "143_24", 106, 136, 0.6),
-    "ombros": ("cmu", "141_21", 24, 64, 0.75),
+    "ombros": ("cmu", "141_21", 24, 64, 0.6),
     "acenar": ("cmu", "141_16", 0, 60, 1.0),
     "apontar": ("cmu", "13_27", 0, 72, 1.0),
 }
