@@ -475,7 +475,7 @@ def personagem(tipo="cara", nome=None, cores=None, peca=None):
                         lambda x, y, z: 0.021 if z < 0.985 else (0.012 if abs(x) > 0.3 else 0.008),
                         cam, cortes=cortes, espessura=0.003, projetar=projetar))
         R.append(_casca(corpo, nome + "_tenis", lambda x, y, z: z < 0.125,
-                        lambda x, y, z: 0.013, sapato, cortes=[("z", 0.125)], espessura=0.004, suavizar=12, sub=1))
+                        lambda x, y, z: 0.016, sapato, cortes=[("z", 0.125)], espessura=0.004, suavizar=8, sub=1))
         _costura(sapato, [("hz", 0.022, 0)], cor=C["sola"], largura=0.044)    # sola clara (faixa até 2,2 cm)
     else:
         mac = _tecido(nome + "_macacao", C["macacao"], escala=380, contraste=0.10, tipo="lona")
@@ -489,6 +489,15 @@ def personagem(tipo="cara", nome=None, cores=None, peca=None):
                         lambda x, y, z: 0.016, sapato, cortes=[("z", 0.2)], espessura=0.005, suavizar=12, sub=1))
         _costura(sapato, [("hz", 0.016, 0)], cor=C["sola"], largura=0.032)
     Q["roupas"] = R
+    # esconde o corpo onde a roupa cobre tudo (o dedo do pé ou o joelho não atravessa o tênis/jeans ao dobrar)
+    if C["roupa"] == "civil":
+        coberto = lambda x, y, z: z < 0.93 and abs(x) < 0.3
+    else:
+        coberto = lambda x, y, z: z < 1.42 and abs(x) < 0.25
+    vg = corpo.vertex_groups.new(name="_coberto")
+    vg.add([v.index for v in corpo.data.vertices if coberto(*v.co)], 1.0, "REPLACE")
+    mk = corpo.modifiers.new("esconde", "MASK")
+    mk.vertex_group, mk.invert_vertex_group = "_coberto", True
     Q["cabelo"] = _cabelo(Q, C["corte"], C["cabelo"])
     _rosto(Q, C)
     s = C["altura"] / ALTURA_ARQ
@@ -521,7 +530,7 @@ VERBOS = {
     "sim": ("ual", "Yes", False),
     "mexer": ("ual", "Fixing_Kneeling", False),
     "chutar": ("cmu", "143_24", 106, 136, 0.6),
-    "ombros": ("cmu", "141_21", 24, 64, 1.0),
+    "ombros": ("cmu", "141_21", 24, 64, 0.75),
     "acenar": ("cmu", "141_16", 0, 60, 1.0),
     "apontar": ("cmu", "13_27", 0, 72, 1.0),
 }
