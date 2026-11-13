@@ -33,7 +33,7 @@ FPS = 24
 ALTURA_ARQ = 1.81                      # altura do corpo-base no arquivo (m)
 
 TIPOS = {
-    "cara": dict(pele="#A86B4C", cabelo="#16100C", camisa="#F0EEE8", calca="#3F5F8F", sapato="#2B2E35",
+    "cara": dict(pele="#A86B4C", cabelo="#1A1410", camisa="#F0EEE8", calca="#3F5F8F", sapato="#2B2E35",
                  sola="#E6E2DA", cinto="#3A2A1E", altura=1.76, corte="crespo", roupa="civil", peca="regata"),
     "ze": dict(pele="#8A5A40", cabelo="#2A1E17", macacao="#1F4E79", detalhe="#E8590C", sapato="#2A211C",
                sola="#151515", altura=1.79, corte="Hair_SimpleParted", roupa="macacao", peca="macacao"),
@@ -538,7 +538,7 @@ def _forma_regata(bm):
             v.co.x, v.co.y = dx * k, yc + dy * k
 
 
-def _acabamento(o, mat, raio=0.0042, lados=8, alisar=12, so_z_acima=None):
+def _acabamento(o, mat, raio=0.0042, lados=8, alisar=40, so_z_acima=None):
     """Viés/ribana: tubo liso seguindo cada borda aberta da casca `o` (esconde qualquer serrilhado do corte), com os
     pesos do vértice de borda mais próximo (deforma junto). so_z_acima: só as bordas acima dessa altura."""
     me = o.data
@@ -573,8 +573,9 @@ def _acabamento(o, mat, raio=0.0042, lados=8, alisar=12, so_z_acima=None):
             continue
         P = [co[i].copy() for i in laco]
         n = len(P)
-        for _ in range(alisar):
-            P = [(P[(k - 1) % n] + P[k] * 2 + P[(k + 1) % n]) / 4 for k in range(n)]
+        for it in range(alisar):                  # Taubin: alisa sem encolher o laço
+            f = 0.5 if it % 2 == 0 else -0.53
+            P = [P[k] + ((P[(k - 1) % n] + P[(k + 1) % n]) / 2 - P[k]) * f for k in range(n)]
         base = len(vs)
         for k in range(n):
             t = (P[(k + 1) % n] - P[(k - 1) % n]).normalized()
@@ -616,7 +617,7 @@ def _regata(corpo, nome, cor):
         return (1.497 + 0.03 * (ax / 0.085) ** 2) if y < 0.03 else (1.525 + 0.012 * (ax / 0.085) ** 2)
 
     def cava(z):
-        return 0.192 - (z - 1.30) * 0.16
+        return 0.19 - (z - 1.30) * 0.21
 
     def tem(x, y, z):
         ax = abs(x)
@@ -654,7 +655,7 @@ def _regata(corpo, nome, cor):
     o = _casca(corpo, nome, tem, lambda x, y, z: 0.009 if abs(x) > 0.16 and z > 1.3 else 0.008, m,
                espessura=0.003, projetar=projetar, forma=_forma_regata, alisar=10, vies=(0.035, 0.006))
     rib = _tecido(nome + "_ribana", "#E6E3DB", escala=1600, contraste=0.10)
-    return [o, _acabamento(o, rib, raio=0.0045, so_z_acima=1.2)]
+    return [o, _acabamento(o, rib, raio=0.0055, so_z_acima=1.2)]
 
 
 def _jeans(corpo, nome, cor):
@@ -816,7 +817,9 @@ def _cabelo_crespo(Q, corpo, cor, pele):
         return z > linha(x, y) and z > 1.6
 
     def desloc(x, y, z):
-        return 0.0025 + 0.017 * _liso(z, 1.735, 1.80) * (1 - 0.4 * _liso(abs(x), 0.04, 0.09))
+        # "black" curto arredondado: ~3,5 cm no topo, caindo para ~0,5 cm nas laterais e nuca (degradê alto);
+        # na linha do cabelo começa rente (sem "aba")
+        return 0.004 + 0.033 * _liso(z, 1.69, 1.785) * _liso(z - linha(x, y), 0.0, 0.045)
 
     m = bpy.data.materials.new(Q["nome"] + "_cabelo")
     m.use_nodes = True
@@ -824,14 +827,14 @@ def _cabelo_crespo(Q, corpo, cor, pele):
     b = nt.nodes["Principled BSDF"]
     b.inputs["Roughness"].default_value = 0.85
     vo = _no(nt, "ShaderNodeTexVoronoi")
-    vo.inputs["Scale"].default_value = 420.0
+    vo.inputs["Scale"].default_value = 300.0
     nt.links.new(_rest(nt), vo.inputs["Vector"])
     nz = _no(nt, "ShaderNodeTexNoise")
     nz.inputs["Scale"].default_value = 1400.0
     nt.links.new(_rest(nt), nz.inputs["Vector"])
     bp = _no(nt, "ShaderNodeBump")
-    bp.inputs["Strength"].default_value = 0.6
-    bp.inputs["Distance"].default_value = 0.002
+    bp.inputs["Strength"].default_value = 0.9
+    bp.inputs["Distance"].default_value = 0.003
     nt.links.new(vo.outputs["Distance"], bp.inputs["Height"])
     nt.links.new(bp.outputs["Normal"], b.inputs["Normal"])
     ca = _no(nt, "ShaderNodeVertexColor", layer_name="vies")
@@ -923,7 +926,7 @@ def personagem(tipo="cara", nome=None, cores=None, peca=None):
                 return True
             if C["peca"] == "regata" and 0.9 < z < 1.6 and ax < 0.3:       # sob a regata, longe das bordas
                 gola = (1.497 + 0.03 * (min(ax, 0.085) / 0.085) ** 2) if y < 0.03 else 1.525
-                if z > 1.27 and ax > 0.192 - (z - 1.30) * 0.16 - 0.012:
+                if z > 1.27 and ax > 0.19 - (z - 1.30) * 0.21 - 0.035:
                     return False
                 return z < gola - 0.012
             return False
