@@ -105,6 +105,11 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
   (`videos/_terceira/`: perseguição do carro → atrás do ombro → close; HUD próprio BOLSO/PNEU/MISSÃO; ~2,5 s/quadro).
   O usuário **gostou do movimento e do HUD**, achou o visual (filtro de desenho sobre o render) **ruim**; o carro
   subindo na calçada pode virar piada. Falta escolher o visual: low-poly estilizado (tipo vídeo ENEM) ou imagens IA.
+- **ESTILO JOGO (atual, aprovado em teste):** câmera de terceira pessoa + HUD próprio (BOLSO/PNEU/MISSÃO/VISÃO
+  RAIO-X), bairro brasileiro low-poly, cor chapada + contorno (`motor3d/estilo_jogo.py`: `bairro`, `chapar_cena`,
+  `contornar_cena`), cabeça do "cara" 1,4× (Copy Scale no osso Head). Vídeo 02 refeito:
+  `videos/calibrar_pneu_jogo/` (`cena.py` = rua, 2 filas ~45 min; raio-X reaproveita `calibrar_pneu/quadros`;
+  `montar.py` = HUD, whip, som com ducking e -14 LUFS) → `saida/calibrar_pneu_jogo.mp4`.
 - Gemini de imagem (`videos/_desenho/gerar.py`): a chave é do plano gratuito, cota 0 para imagem → precisa
   faturamento ativado pelo usuário.
 
