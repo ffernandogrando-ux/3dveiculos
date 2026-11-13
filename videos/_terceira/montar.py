@@ -10,7 +10,8 @@ T_DIN0, T_DIN1 = 5.76 - 2, 7.2 - 2              # "deixando dinheiro no asfalto"
 T_CORTE, T_TUM, T_OMB, T_SAI = 5.74, 7.9, 8.14, 9.1
 FB = os.path.join(RAIZ, "assets", "fontes")
 fonte = lambda s: ImageFont.truetype("/usr/share/fonts/opentype/inter/Inter-Black.otf", s)
-SAIDA = os.path.join(AQUI, "_final")
+V2 = os.environ.get("V2") == "1"
+SAIDA = os.path.join(AQUI, "_final2" if V2 else "_final")
 os.makedirs(SAIDA, exist_ok=True)
 
 
@@ -47,6 +48,12 @@ def hud(img, t):
     d.rounded_rectangle((W - 186, 76, W - 186 + 154 * 0.32, 90), 5, fill=(235, 60, 50) if pisca else (150, 40, 35))
     if pisca:
         texto(d, (W - 74, 47), "⚠", 26, (255, 200, 40), 0)
+    # --- piada: estacionou na calçada
+    if V2 and 4.3 < t < 5.7:
+        u = min((t - 4.3) / 0.15, 1)
+        caixa(d, (60, 300, W - 60, 372), 12, fill=(235, 170, 30, int(235 * u)), outline=(20, 20, 20, int(255 * u)), w=3)
+        texto(d, (W / 2, 312), "⚠ ESTACIONOU NA CALÇADA", 27, (20, 20, 20, int(255 * u)), 0, "ma")
+        texto(d, (W / 2, 344), "−R$ multa", 20, (120, 20, 20, int(255 * u)), 0, "ma")
     # --- missão
     if T_CORTE + 0.1 < t < T_TUM - 0.2:
         u = min((t - T_CORTE - 0.1) / 0.2, 1)
@@ -66,14 +73,14 @@ def hud(img, t):
     return img.convert("RGB")
 
 
-fs = sorted(glob.glob(os.path.join(AQUI, "_quadros", "*.png")))
+PASTA = "_quadros2" if V2 else "_quadros"
 n = int(D * FPS)
 ult = None
 for i in range(n):
-    p = os.path.join(AQUI, "_quadros", f"{i + 1:04d}.png")
+    p = os.path.join(AQUI, PASTA, f"{i + 1:04d}.png")
     if os.path.exists(p):
         ult = p
-    im = desenho(Image.open(ult))
+    im = Image.open(ult).convert("RGB") if V2 else desenho(Image.open(ult))
     hud(im, i / FPS).save(os.path.join(SAIDA, f"{i:04d}.png"))
 
 S = lambda *p: os.path.join(RAIZ, *p)
@@ -81,6 +88,7 @@ sons = [  # (arquivo, início local, volume, duração máx)
     (S("assets/sons/carro/Car_Engine_Loop.ogg"), 0.0, 0.35, 4.6),
     (S("assets/sons/carro/Car_Engine_Turning_Off.ogg"), 4.4, 0.4, 2.0),
     (S("assets/sons/carro/Car_Door_Close.ogg"), 5.55, 0.6, 1.5),
+    (S("biblioteca_sons/impacto_grave/hit.wav"), 3.9, 0.45, 0.6),
     (S("biblioteca_sons/aparecer/pop.ogg"), T_CORTE + 0.1, 0.5, 1.0),
     (S("biblioteca_sons/impacto_grave/hit.wav"), T_TUM - 0.02, 0.9, 1.0),
     (S("biblioteca_sons/aparecer/pop.ogg"), T_SAI + 0.1, 0.6, 1.0),
@@ -95,6 +103,6 @@ for k, (f, t0, v, dur) in enumerate(sons):
 fc.append("[1:a]volume=1.0[nar]")
 fc.append("[nar]" + "".join(f"[s{k}]" for k in range(len(sons))) + f"amix=inputs={len(sons) + 1}:normalize=0,atrim=0:{D}[a]")
 cmd += ["-filter_complex", ";".join(fc), "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-crf", "19", "-c:a", "aac", "-b:a", "192k", os.path.join(AQUI, "teste_terceira.mp4")]
+        "-crf", "19", "-c:a", "aac", "-b:a", "192k", os.path.join(AQUI, "teste_terceira_v2.mp4" if V2 else "teste_terceira.mp4")]
 subprocess.run(cmd, check=True)
 print("ok")
