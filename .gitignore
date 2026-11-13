@@ -32,3 +32,8 @@ videos/_assets/_tmp/
 videos/*/_quadros*/
 videos/_animacao_pronta/_quadros_*/
 videos/_expressoes/_e_*.png
+videos/_terceira/_quadros/
+videos/_terceira/_final/
+videos/_terceira/_testes/
+videos/_terceira/render.log
+videos/_terceira/*.mp4
