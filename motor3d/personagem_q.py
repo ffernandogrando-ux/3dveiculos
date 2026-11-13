@@ -196,7 +196,7 @@ def _afinar(o):
     o.data.update()
 
 
-def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suavizar=0, sub=1):
+def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suavizar=0, sub=1, projetar=None):
     """Roupa = cópia do corpo com só as faces de `dentro(x,y,z)`, empurrada `desloc(x,y,z)` (m) pela normal; as
     bordas abertas são niveladas nos planos `cortes` [("z", 0.99), ("x", 0.36)...] (borda reta, sem serrilhado) e
     a espessura vem do Solidify. Mesmos grupos de vértices + Armature do corpo → deforma igual."""
@@ -217,7 +217,11 @@ def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suaviz
     novo = {v: v.co + v.normal * desloc(*v.co) for v in bm.verts}
     for v, c in novo.items():
         v.co = c
-    for v in bm.verts:
+    borda = [v for v in bm.verts if v.is_boundary]
+    for v in borda:
+        if projetar is not None:
+            v.co = projetar(v.co.copy())
+            continue
         if v.is_boundary:
             melhor = None
             for eixo, val in cortes:
@@ -229,6 +233,15 @@ def _casca(corpo, nome, dentro, desloc, mat, cortes=(), espessura=0.0035, suaviz
             if melhor:
                 _, i, val = melhor
                 v.co[i] = math.copysign(val, v.co[i]) if i == 0 else val
+    # borda lisa: média com os vizinhos de borda (tira o serrilhado das faces cortadas)
+    viz = {v: [e.other_vert(v) for e in v.link_edges if e.is_boundary] for v in borda}
+    for _ in range(4):
+        novo = {v: (v.co * 2 + sum((u.co for u in viz[v]), Vector())) / (2 + len(viz[v])) for v in borda if viz[v]}
+        for v, c in novo.items():
+            v.co = c
+        if projetar is not None:
+            for v in borda:
+                v.co = projetar(v.co.copy())
     bm.to_mesh(o.data)
     bm.free()
     o.data.materials.clear()
@@ -355,7 +368,7 @@ def _rosto(Q, cores, expressao="neutro"):
     ref = bpy.data.objects.new(nome + "_ref_rosto", None)
     for c in corpo.users_collection:
         c.objects.link(ref)
-    ref.matrix_world = Matrix.LocRotScale(Vector((0, 0.0, 1.681)), None, Vector((0.95, 1.0, 1.17)))
+    ref.matrix_world = Matrix.LocRotScale(Vector((0, 0.0, 1.682)), None, Vector((0.95, 1.0, 0.97)))
     bpy.context.view_layer.update()
     _no_osso(ref, arm, "Head")
     _no_osso(ob, arm, "Head")
@@ -423,11 +436,11 @@ def personagem(tipo="cara", nome=None, cores=None, peca=None):
     if C["roupa"] == "civil":
         jeans = _tecido(nome + "_jeans", C["calca"], escala=520, tipo="brim")
         _costura(jeans, [("ret", 0.035, 0.135, 0.845, 0.945, 1),      # bolsos de trás
-                         ("hz", 0.955, 0), ("hz", 0.115, 0)], cor="#C9963A")
+                         ("hz", 0.94, 0), ("hz", 0.115, 0)], cor="#C9963A")
         R.append(_casca(corpo, nome + "_calca",
-                        lambda x, y, z: 0.105 < z < 0.995 and abs(x) < 0.3,
-                        lambda x, y, z: 0.011 if z > 0.958 else (0.012 if z < 0.17 else 0.0075),
-                        jeans, cortes=[("z", 0.995), ("z", 0.105)], espessura=0.004))
+                        lambda x, y, z: 0.105 < z < 0.975 and abs(x) < 0.3,
+                        lambda x, y, z: 0.010 if z > 0.94 else (0.012 if z < 0.17 else 0.0075),
+                        jeans, cortes=[("z", 0.975), ("z", 0.105)], espessura=0.004))
         cam = _tecido(nome + "_camisa", C["camisa"], escala=700, contraste=0.08)
         if C["peca"] == "regata":
             def tem(x, y, z):
@@ -439,14 +452,28 @@ def personagem(tipo="cara", nome=None, cores=None, peca=None):
                 corte = (1.39 + 0.13 * (ax / 0.1) ** 2) if y < 0.03 else (1.47 + 0.05 * (ax / 0.1) ** 2)
                 return z < corte
             cortes = [("z", 0.925)]
+
+            def projetar(c):
+                ax, sx = abs(c.x), (1 if c.x >= 0 else -1)
+                if c.z < 1.1:
+                    c.z = 0.925
+                    return c
+                zc = (1.39 + 0.13 * (min(ax, 0.1) / 0.1) ** 2) if c.y < 0.03 else (1.47 + 0.05 * (min(ax, 0.1) / 0.1) ** 2)
+                xc = 0.205 - (c.z - 1.30) * 0.30
+                if ax < 0.095 and abs(c.z - zc) < 0.05:
+                    c.z = zc                          # gola em U
+                elif c.z > 1.28 and ax > 0.1:
+                    c.x = sx * max(xc, 0.1)           # cava
+                return c
         else:
+            projetar = None
             def tem(x, y, z):
                 ax = abs(x)
                 return 0.925 < z < (1.505 if y < 0.03 else 1.525) and ax < 0.35
             cortes = [("z", 0.925), ("x", 0.35), ("z", 1.505)]
         R.append(_casca(corpo, nome + "_camisa", tem,
-                        lambda x, y, z: 0.0135 if z < 0.985 else (0.012 if abs(x) > 0.3 else 0.008),
-                        cam, cortes=cortes, espessura=0.003))
+                        lambda x, y, z: 0.021 if z < 0.985 else (0.012 if abs(x) > 0.3 else 0.008),
+                        cam, cortes=cortes, espessura=0.003, projetar=projetar))
         R.append(_casca(corpo, nome + "_tenis", lambda x, y, z: z < 0.125,
                         lambda x, y, z: 0.013, sapato, cortes=[("z", 0.125)], espessura=0.004, suavizar=12, sub=1))
         _costura(sapato, [("hz", 0.022, 0)], cor=C["sola"], largura=0.044)    # sola clara (faixa até 2,2 cm)

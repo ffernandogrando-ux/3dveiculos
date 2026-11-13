@@ -69,10 +69,10 @@ lin1 = [ab(out[0]), ab(out[1]), ab(out[2]), ab(out[3])]
 rost = []
 for nm in ("cara", "ze"):
     for exp in ("sorriso", "bravo", "surpreso"):
-        im = Image.open(os.path.join(AQUI, f"_pq_rosto_{nm}_{exp}.png")).convert("RGB").crop((0, 120, 576, 760)).resize((192, 213))
+        im = Image.open(os.path.join(AQUI, f"_pq_rosto_{nm}_{exp}.png")).convert("RGB").crop((0, 250, 576, 890)).resize((192, 213))
         ImageDraw.Draw(im).text((6, 4), f"{nm}: {exp}", fill=(255, 255, 255))
         rost.append(im)
-folha = Image.new("RGB", (W * 4, 512 + 213 * 2), (24, 24, 24))
+folha = Image.new("RGB", (W * 4, 512 + 213), (24, 24, 24))
 for k, im in enumerate(lin1):
     folha.paste(im, (k * W, 0))
 for k, im in enumerate(rost):
