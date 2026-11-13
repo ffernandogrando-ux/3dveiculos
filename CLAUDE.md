@@ -98,6 +98,16 @@ disso!") → "O certo é simples…" → "Manda esse vídeo pra quem…" → "E 
 - Teste de animação pronta (Quaternius + mocap CMU, `motor3d/animacao_pronta.py`) em andamento. Mixamo exige login
   do usuário (ele baixa os .fbx e envia).
 
+**Feito (13/11/2026) — busca de estilo mais rápido:**
+- Personagem: corpo contínuo Quaternius (`motor3d/personagem_q.py`, "cara": regata branca fechada, jeans, cinto,
+  cabelo crespo curto, rosto limpo; original, nada de imitar personagem de jogo). Provas em `videos/_animacao_pronta/`.
+- Testes de estilo: papel recortado 2D em PIL (`videos/_papel/`, ~0,6 s/quadro); câmera em terceira pessoa de jogo
+  (`videos/_terceira/`: perseguição do carro → atrás do ombro → close; HUD próprio BOLSO/PNEU/MISSÃO; ~2,5 s/quadro).
+  O usuário **gostou do movimento e do HUD**, achou o visual (filtro de desenho sobre o render) **ruim**; o carro
+  subindo na calçada pode virar piada. Falta escolher o visual: low-poly estilizado (tipo vídeo ENEM) ou imagens IA.
+- Gemini de imagem (`videos/_desenho/gerar.py`): a chave é do plano gratuito, cota 0 para imagem → precisa
+  faturamento ativado pelo usuário.
+
 **Pendente, nesta ordem:**
 1. Lapidar o estilo adulto (Zé menos "manequim", carros sem cara de perua) e o usuário aprovar; aprovar o nome do canal.
 2. Para animar 70 s (apontado pelo revisor): pneu com sulco + `girar_rodas()` com sinal por lado; todas as mãos
